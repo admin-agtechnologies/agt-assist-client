@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@layer base {
+  :root {
+    --bg: #F8FAFC;
+    --bg-card: #FFFFFF;
+    --bg-sidebar: #FFFFFF;
+    --border: #E2E8F0;
+    --text: #0F172A;
+    --text-muted: #64748B;
+    --text-sidebar: #334155;
+    --accent: #075E54;
+    --accent-hover: #128C7E;
+    --accent-light: #DCF8C6;
+    --sidebar-active-bg: #F0FDF4;
+    --sidebar-active-text: #075E54;
+    --shadow: 0 1px 3px rgb(0 0 0 / 0.07);
+  }
+  .dark {
+    --bg: #0B1120;
+    --bg-card: #111827;
+    --bg-sidebar: #0F1923;
+    --border: #1E2D3D;
+    --text: #F1F5F9;
+    --text-muted: #94A3B8;
+    --text-sidebar: #CBD5E1;
+    --accent: #25D366;
+    --accent-hover: #128C7E;
+    --accent-light: #022c22;
+    --sidebar-active-bg: #022c22;
+    --sidebar-active-text: #25D366;
+    --shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  }
+
+  * { box-sizing: border-box; }
+  html { font-family: 'Inter', system-ui, sans-serif; }
+  body { background: var(--bg); color: var(--text); transition: background 0.2s, color 0.2s; }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border bg-[var(--bg-card)] border-[var(--border)];
+    box-shadow: var(--shadow);
+  }
+  .input-base {
+    @apply w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)]
+           text-sm outline-none transition-all placeholder:text-[var(--text-muted)]
+           focus:border-[#25D366] focus:ring-2 focus:ring-[#25D366]/10;
+  }
+  .label-base {
+    @apply block text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-1.5;
+  }
+  .btn-primary {
+    @apply px-6 py-2.5 bg-[#075E54] text-white rounded-xl text-sm font-semibold
+           hover:bg-[#128C7E] transition-all shadow-sm
+           disabled:opacity-60 disabled:cursor-not-allowed
+           flex items-center gap-2;
+  }
+  .btn-ghost {
+    @apply px-4 py-2 rounded-xl text-sm font-medium text-[var(--text-muted)]
+           hover:bg-[var(--bg)] transition-colors;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold;
+  }
+  .spinner {
+    @apply w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin;
+  }
+  .stat-card {
+    @apply card p-5 flex flex-col gap-1;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Animations */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes zoomIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }
+.animate-slide-up { animation: slideUp 0.25s ease-out; }
+.animate-zoom-in { animation: zoomIn 0.2s ease-out; }

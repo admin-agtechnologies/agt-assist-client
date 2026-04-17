@@ -1,0 +1,17 @@
+export const PAGE_SIZE = 20;
+export const PAGE_SIZE_SM = 5;
+export const DEBOUNCE_DELAY = 400;
+export const TOAST_DURATION = 4000;
+export const TOKEN_KEY = "agt_access_token";
+export const REFRESH_KEY = "agt_refresh_token";
+export const LOCALE_KEY = "agt-locale";
+export const THEME_KEY = "agt-theme";
+export const TENANT_KEY = "agt-tenant";
+export const Z_MODAL = 9999;
+export const Z_SIDEBAR = 50;
+export const Z_HEADER = 30;
+export const WHATSAPP_PROVIDERS = ["waha", "meta_api"] as const;
+export const VOICE_AI_PROVIDERS = ["gemini", "openai"] as const;
+export const PHONE_OPERATORS = ["twilio", "orange", "mtn", "camtel"] as const;
+export const BOT_STATUSES = ["active", "paused", "archived"] as const;
+export const APPOINTMENT_STATUSES = ["pending", "confirmed", "done", "cancelled"] as const;
