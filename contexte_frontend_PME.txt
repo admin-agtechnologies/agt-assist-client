@@ -1,6 +1,11 @@
 ﻿Next.js Project Context
+<<<<<<< HEAD
 Generated On: 2026-04-21 05:26:59
 Root: C:\Users\hp\Documents\gabriel\challenge-agt\agt-assist-client
+=======
+Generated On: 2026-04-20 20:29:06
+Root: C:\Users\mbiam\Desktop\dev\agt_plateforme\agt-assist-client
+>>>>>>> 269ba68814f1be0ecf3012e705534410a97dc166
 ===============================================
 
 // FILE: db/db.json
@@ -8274,7 +8279,11 @@ import {
   Check, MessageSquare, Phone, CalendarDays, BarChart3, Smartphone, Globe,
   Sun, Moon, Star, Users, TrendingUp, Clock, Award,
   ChevronLeft, ChevronRight, Play, MapPin, Mail, ArrowRight,
+<<<<<<< HEAD
   Bot, BookOpen, HelpCircle,
+=======
+  Bot, BookOpen, HelpCircle,Zap
+>>>>>>> 269ba68814f1be0ecf3012e705534410a97dc166
 } from "lucide-react";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -8551,6 +8560,12 @@ function HeroCarousel({ t, locale }: HeroCarouselProps) {
           key={`badge-${current}`}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 backdrop-blur-sm border border-white/25 text-white text-sm font-semibold mb-6 animate-fade-in"
         >
+<<<<<<< HEAD
+=======
+          {current === 0 && <Zap className="w-4 h-4 text-[#25D366]" />}
+          {current === 1 && <MessageSquare className="w-4 h-4 text-[#25D366]" />}
+          {current === 2 && <Phone className="w-4 h-4 text-[#8B5CF6]" />}
+>>>>>>> 269ba68814f1be0ecf3012e705534410a97dc166
           {locale === "fr" ? slide.badgeFr : slide.badgeEn}
         </div>
 
@@ -9068,6 +9083,17 @@ export default function LandingPage() {
 }
 
 // END OF FILE: src/app/page.tsx
+
+// FILE: src/app/t
+-----------------------------------------------
+# 1. Stop le serveur (Ctrl+C)                                                                                                                                                     
+# 2. Vider cache ET node_modules/.cache
+Remove-Item -Recurse -Force .next
+Remove-Item -Recurse -Force node_modules\.cache 
+# 3. Relancer
+npm run dev:mock
+
+// END OF FILE: src/app/t
 
 // FILE: src/components/auth/AuthShell.tsx
 -----------------------------------------------
