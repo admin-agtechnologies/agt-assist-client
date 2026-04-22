@@ -1,5 +1,5 @@
 ﻿Next.js Project Context
-Generated On: 2026-04-22 12:43:05
+Generated On: 2026-04-22 13:30:34
 Root: C:\Users\hp\Documents\gabriel\challenge-agt\agt-assist-client
 ===============================================
 
@@ -7356,7 +7356,7 @@ import {
   subscriptionsRepository, rendezVousRepository,
 } from "@/repositories";
 import { formatDateTime, formatDate, cn } from "@/lib/utils";
-import { Badge, PageLoader, EmptyState, UsageBar, Spinner } from "@/components/ui";
+import { Badge, PageLoader, EmptyState, UsageBar } from "@/components/ui";
 import { ROUTES, PLANS_CONFIG } from "@/lib/constants";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -7371,20 +7371,7 @@ import {
 import type { TenantStats, Conversation, Subscription, RendezVous } from "@/types/api";
 import Link from "next/link";
 
-// ── Mock historique conversation ──────────────────────────────────────────────
-interface MockMessage { role: "bot" | "client"; text: string; time: string; }
-const MOCK_HISTORY: Record<string, MockMessage[]> = {
-  default: [
-    { role: "client", text: "Bonjour, je voudrais prendre un rendez-vous.", time: "14:02" },
-    { role: "bot", text: "Bonjour ! Bien sûr, pour quel service ?", time: "14:02" },
-    { role: "client", text: "Une consultation médicale.", time: "14:03" },
-    { role: "bot", text: "Parfait. Quelle date vous convient ?", time: "14:03" },
-    { role: "client", text: "Demain à 10h si possible.", time: "14:04" },
-    { role: "bot", text: "RDV confirmé pour demain à 10h. Vous recevrez un rappel.", time: "14:04" },
-  ],
-};
-
-// ── Données semaine mockées (fallback si pas de vraies stats) ─────────────────
+// ── Données semaine fallback (le backend ne retourne pas de données par jour) ─
 const WEEK_FALLBACK = [
   { day: "Lun", messages: 38, calls: 3 }, { day: "Mar", messages: 52, calls: 5 },
   { day: "Mer", messages: 45, calls: 2 }, { day: "Jeu", messages: 61, calls: 7 },
@@ -7409,74 +7396,82 @@ export default function PmeDashboardPage() {
   useEffect(() => { setMounted(true); }, []);
 
   const fetchAll = useCallback(async () => {
-    if (!user?.tenant_id) { setLoading(false); return; }
+    setLoading(true);
     const today = new Date().toISOString().split("T")[0];
     const [s, c, sub, appts] = await Promise.all([
-      statsRepository.getByTenant(user.tenant_id).catch(() => null),
-      conversationsRepository.getList({ tenant_id: user.tenant_id }).catch(() => ({ results: [] })),
-      subscriptionsRepository.getMine(),rendezVousRepository.getList().catch(() => ({ results: [] })),
-      
+      statsRepository.getByTenant().catch(() => null),
+      conversationsRepository.getList().catch(() => ({ results: [] as Conversation[], count: 0, next: null, previous: null })),
+      subscriptionsRepository.getMine(),
+      rendezVousRepository.getList().catch(() => ({ results: [] as RendezVous[], count: 0, next: null, previous: null })),
     ]);
     setStats(s);
-    setConversations(c.results.slice(0, 5));
+    setConversations((c.results ?? []).slice(0, 5));
     setSubscription(sub);
-    // Filtrer RDV du jour
     setTodayAppointments(
-      appts.results.filter((a:  RendezVous) => a.scheduled_at?.startsWith(today)).slice(0, 3)
+      (appts.results ?? []).filter((a: RendezVous) => a.scheduled_at?.startsWith(today)).slice(0, 3)
     );
     setLoading(false);
-  }, [user?.tenant_id]);
+  }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    void router; // router conservé pour usage futur
+    fetchAll();
+  }, [fetchAll, router]);
 
   if (loading) return <PageLoader />;
 
-  // ── KPI cards ───────────────────────────────────────────────────────────────
+  // ── KPI cards — champs alignés avec EntrepriseStatsSerializer ───────────────
   const statCards = [
     {
-      label: t.messagesToday, value: stats?.messages_today ?? 0,
-      week: stats?.messages_week ?? 0, icon: MessageSquare,
+      label: t.messagesToday,
+      value: stats?.messages_aujourdhui ?? 0,
+      week: stats?.messages_semaine ?? 0,
+      icon: MessageSquare,
       color: "text-[#25D366]", bg: "bg-[#25D366]/10",
     },
     {
-      label: t.callsToday, value: stats?.calls_today ?? 0,
-      week: stats?.calls_week ?? 0, icon: Phone,
+      label: t.callsToday,
+      value: stats?.appels_aujourdhui ?? 0,
+      week: null, // pas de champ appels_semaine côté backend
+      icon: Phone,
       color: "text-[#6C3CE1]", bg: "bg-[#6C3CE1]/10",
     },
     {
-      label: t.appointmentsToday, value: stats?.appointments_today ?? 0,
-      week: stats?.appointments_week ?? 0, icon: CalendarDays,
+      label: t.appointmentsToday,
+      value: stats?.rdv_aujourdhui ?? 0,
+      week: stats?.rdv_semaine ?? 0,
+      icon: CalendarDays,
       color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-900/20",
     },
   ];
 
-  // ── Données graphique ────────────────────────────────────────────────────────
-  const weekData = stats?.week_data ?? WEEK_FALLBACK;
+  // Graphique semaine — toujours en fallback (pas de données par jour côté backend)
+  const weekData = WEEK_FALLBACK;
 
   // ── Plan actuel ──────────────────────────────────────────────────────────────
   const currentPlan = subscription
     ? PLANS_CONFIG.find(p => p.slug === subscription.plan?.slug) ?? null
     : null;
-  const msgUsed = stats?.messages_week ?? 0;
+  const msgUsed = stats?.messages_semaine ?? 0;
   const msgTotal = currentPlan?.messages_limit ?? 2000;
-  const callsUsed = stats?.calls_week ?? 0;
+  const callsUsed = stats?.appels_aujourdhui ?? 0;
   const callsTotal = currentPlan?.calls_limit ?? 100;
 
-  // ── Mock stats emails ────────────────────────────────────────────────────────
-  const emailSentWeek = stats?.emails_sent_week ?? 12;
+  // ── Emails (mock — pas d'endpoint dédié côté backend pour l'instant) ─────────
+  const emailSentWeek = 12;
   const emailOpened = Math.round(emailSentWeek * 0.68);
   const emailFailed = Math.round(emailSentWeek * 0.04);
 
   // ── Statuts RDV ──────────────────────────────────────────────────────────────
-const apptStatusVariant: Record<string, "green" | "amber" | "slate" | "red"> = {
-  confirme: "green", en_attente: "amber", termine: "slate", annule: "red",
-};
-const apptStatusLabel: Record<string, string> = {
-  confirme: d.appointments.statuses.confirmed,
-  en_attente: d.appointments.statuses.pending,
-  termine: d.appointments.statuses.done,
-  annule: d.appointments.statuses.cancelled,
-};
+  const apptStatusVariant: Record<string, "green" | "amber" | "slate" | "red"> = {
+    confirme: "green", en_attente: "amber", termine: "slate", annule: "red",
+  };
+  const apptStatusLabel: Record<string, string> = {
+    confirme: d.appointments.statuses.confirmed,
+    en_attente: d.appointments.statuses.pending,
+    termine: d.appointments.statuses.done,
+    annule: d.appointments.statuses.cancelled,
+  };
 
   return (
     <>
@@ -7514,6 +7509,21 @@ const apptStatusLabel: Record<string, string> = {
           })}
         </div>
 
+        {/* ── Conversations actives ─────────────────────────────────────────── */}
+        {stats && (
+          <div className="card p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#075E54]/10 flex items-center justify-center">
+                <Activity className="w-5 h-5 text-[#075E54]" />
+              </div>
+              <div>
+                <p className="text-2xl font-black text-[#075E54]">{stats.conversations_actives}</p>
+                <p className="text-xs text-[var(--text-muted)]">{t.activeConversations ?? "Conversations actives"}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Accès rapides ─────────────────────────────────────────────────── */}
         <div className="card p-4">
           <p className="text-xs font-black uppercase tracking-widest text-[var(--text-muted)] mb-3">
@@ -7546,7 +7556,7 @@ const apptStatusLabel: Record<string, string> = {
           {/* Colonne gauche — 3/5 */}
           <div className="lg:col-span-3 space-y-6">
 
-            {/* Graphique */}
+            {/* Graphique semaine */}
             <div className="card p-6">
               <h2 className="text-sm font-bold text-[var(--text)] mb-4">{t.thisWeek}</h2>
               <ResponsiveContainer width="100%" height={200}>
@@ -7586,22 +7596,22 @@ const apptStatusLabel: Record<string, string> = {
                       onClick={() => setSelectedConv(conv)}
                       className="w-full px-6 py-4 flex items-center gap-4 hover:bg-[var(--bg)] transition-colors text-left group">
                       <div className="w-9 h-9 rounded-full bg-[#25D366]/10 flex items-center justify-center text-[#25D366] flex-shrink-0">
-                        {conv.channel === "whatsapp"
+                        {conv.bot_type === "whatsapp"
                           ? <MessageSquare className="w-4 h-4" />
                           : <Phone className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-[var(--text)] truncate">
-                          {conv.client_name || conv.client_identifier}
+                          {conv.client_nom || conv.client_telephone}
                         </p>
-                        <p className="text-xs text-[var(--text-muted)] truncate">{conv.last_message}</p>
+                        <p className="text-xs text-[var(--text-muted)] truncate">{conv.dernier_message}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <Badge variant={conv.channel === "whatsapp" ? "green" : "violet"}>
-                          {conv.channel === "whatsapp" ? t.channel_whatsapp : t.channel_voice}
+                        <Badge variant={conv.bot_type === "whatsapp" ? "green" : "violet"}>
+                          {conv.bot_type === "whatsapp" ? t.channel_whatsapp : t.channel_voice}
                         </Badge>
                         <p className="text-[10px] text-[var(--text-muted)] mt-1">
-                          {formatDateTime(conv.last_message_at)}
+                          {formatDateTime(conv.dernier_message_at)}
                         </p>
                       </div>
                       <ChevronRight className="w-4 h-4 text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
@@ -7700,7 +7710,7 @@ const apptStatusLabel: Record<string, string> = {
               )}
             </div>
 
-            {/* Emails de rappel */}
+            {/* Emails de rappel (mock — pas encore d'endpoint dédié) */}
             <div className="card p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-bold text-[var(--text)]">{t.emailStats}</h2>
@@ -7741,14 +7751,14 @@ const apptStatusLabel: Record<string, string> = {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-[var(--text)] truncate">
-                  {selectedConv.client_name || selectedConv.client_identifier}
+                  {selectedConv.client_nom || selectedConv.client_telephone}
                 </p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <Badge variant={selectedConv.channel === "whatsapp" ? "green" : "violet"}>
-                    {selectedConv.channel === "whatsapp" ? t.channel_whatsapp : t.channel_voice}
+                  <Badge variant={selectedConv.bot_type === "whatsapp" ? "green" : "violet"}>
+                    {selectedConv.bot_type === "whatsapp" ? t.channel_whatsapp : t.channel_voice}
                   </Badge>
                   <span className="text-[10px] text-[var(--text-muted)]">
-                    {formatDateTime(selectedConv.last_message_at)}
+                    {formatDateTime(selectedConv.dernier_message_at)}
                   </span>
                 </div>
               </div>
@@ -7758,38 +7768,52 @@ const apptStatusLabel: Record<string, string> = {
               </button>
             </div>
 
-            {/* Historique messages */}
+            {/* Résumé rapport si disponible */}
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
               <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-4">
                 {t.conversationHistory}
               </p>
-              {(MOCK_HISTORY[selectedConv.id] ?? MOCK_HISTORY.default).map((msg, i) => (
-                <div key={i} className={cn("flex", msg.role === "client" ? "justify-end" : "justify-start")}>
-                  <div className={cn(
-                    "max-w-[80%] px-4 py-2.5 rounded-2xl text-sm",
-                    msg.role === "client"
-                      ? "bg-[#25D366] text-white rounded-br-sm"
-                      : "bg-[var(--bg)] text-[var(--text)] rounded-bl-sm border border-[var(--border)]"
-                  )}>
-                    <p className="leading-relaxed">{msg.text}</p>
-                    <p className={cn("text-[10px] mt-1", msg.role === "client" ? "text-white/70 text-right" : "text-[var(--text-muted)]")}>
-                      {msg.time}
-                    </p>
-                  </div>
+              {selectedConv.rapport ? (
+                <div className="space-y-3">
+                  {selectedConv.rapport.resume && (
+                    <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
+                      <p className="text-xs font-bold text-[var(--text)] mb-1">Résumé</p>
+                      <p className="text-sm text-[var(--text-muted)] leading-relaxed">{selectedConv.rapport.resume}</p>
+                    </div>
+                  )}
+                  {selectedConv.rapport.points_cles?.length > 0 && (
+                    <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
+                      <p className="text-xs font-bold text-[var(--text)] mb-2">Points clés</p>
+                      <ul className="space-y-1">
+                        {selectedConv.rapport.points_cles.map((pt, i) => (
+                          <li key={i} className="text-xs text-[var(--text-muted)] flex items-start gap-2">
+                            <span className="text-[#25D366] mt-0.5">•</span>
+                            <span>{pt}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-              ))}
+              ) : (
+                <p className="text-sm text-[var(--text-muted)] text-center py-8">
+                  {selectedConv.nb_messages} message{selectedConv.nb_messages > 1 ? "s" : ""}
+                </p>
+              )}
             </div>
 
-            {/* Footer : action déclenchée */}
+            {/* Footer */}
             <div className="p-5 border-t border-[var(--border)] bg-[var(--bg)] rounded-b-3xl">
               <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-2">
                 {t.conversationAction}
               </p>
-              {selectedConv.appointment_id ? (
+              {selectedConv.rendez_vous ? (
                 <div className="flex items-center gap-2 text-sm text-[#25D366] font-semibold">
                   <CalendarDays className="w-4 h-4" />
                   <span>{d.appointments.title} — {d.appointments.statuses.confirmed}</span>
                 </div>
+              ) : selectedConv.human_handoff ? (
+                <p className="text-sm text-amber-600 font-semibold">⚠️ Transfert humain requis</p>
               ) : (
                 <p className="text-sm text-[var(--text-muted)]">{t.conversationNoAction}</p>
               )}
@@ -14850,7 +14874,6 @@ export const tenantsRepository = {
 // L'entreprise est injectée automatiquement côté backend (perform_create).
 // ══════════════════════════════════════════════════════════════════════════════
 export const botsRepository = {
-  /** Liste les bots de l'entreprise connectée (isolation côté backend). */
   getList: (f?: BotFilters): Promise<PaginatedResponse<Bot>> =>
     api.get("/api/v1/bots/", { params: p(f) }).then((data: unknown) =>
       Array.isArray(data)
@@ -14866,8 +14889,6 @@ export const botsRepository = {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // NUMÉROS DE TÉLÉPHONE
-// Champs alignés avec NumeroTelephoneSerializer Django :
-//   numero, operateur, config_provider, entreprise, statut, notes
 // Endpoint réservé aux admins AGT (read-only depuis l'espace PME).
 // ══════════════════════════════════════════════════════════════════════════════
 export const phoneNumbersRepository = {
@@ -15051,32 +15072,37 @@ export const plansRepository = {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // STATS
+// Endpoint réel : /api/v1/dashboard/entreprise/ (auth-based, pas de tenant_id)
+// Endpoint admin : /api/v1/dashboard/admin/
 // ══════════════════════════════════════════════════════════════════════════════
 export const statsRepository = {
-  getByTenant: (tenantId: string): Promise<TenantStats | null> =>
-    api.get("/api/v1/stats/", { params: { tenant_id: tenantId } })
-      .then((data: unknown) =>
-        Array.isArray(data) && data.length > 0 ? (data[0] as TenantStats) : null,
-      ),
-  getAdmin: (): Promise<AdminStats> => api.get("/api/v1/admin-stats/"),
+  // Le paramètre _tenantId est conservé pour compatibilité des call-sites existants
+  // mais n'est pas transmis — le backend filtre automatiquement par user connecté.
+  getByTenant: (_tenantId?: string | null): Promise<TenantStats | null> =>
+    api.get<TenantStats>("/api/v1/dashboard/entreprise/").catch(() => null),
+  getAdmin: (): Promise<AdminStats> =>
+    api.get<AdminStats>("/api/v1/dashboard/admin/"),
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CONVERSATIONS
+// Aligné avec ConversationViewSet — isolation tenant auto via auth
 // ══════════════════════════════════════════════════════════════════════════════
 export const conversationsRepository = {
-  getList: (f?: ConversationFilters | string): Promise<PaginatedResponse<Conversation>> => {
-    const filters = typeof f === "string" ? { tenant_id: f } : f;
-    return api.get("/api/v1/conversations/", { params: p(filters) })
+  // Les filtres supportés côté backend : statut, human_handoff, bot
+  getList: (f?: ConversationFilters): Promise<PaginatedResponse<Conversation>> =>
+    api.get("/api/v1/conversations/", { params: p(f) })
       .then((data: unknown) =>
         Array.isArray(data)
           ? { results: data as Conversation[], count: (data as Conversation[]).length, next: null, previous: null }
           : (data as PaginatedResponse<Conversation>),
-      );
-  },
+      ),
+  getById: (id: string): Promise<Conversation> => api.get(`/api/v1/conversations/${id}/`),
   getMessages: (conversationId: string) =>
-    api.get("/api/v1/conversations/messages/", { params: { conversation_id: conversationId } })
+    api.get(`/api/v1/conversations/${conversationId}/messages/`)
       .then((data: unknown) => (Array.isArray(data) ? data : [])),
+  getRapport: (conversationId: string) =>
+    api.get(`/api/v1/conversations/${conversationId}/rapport/`).catch(() => null),
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -15174,6 +15200,24 @@ export const billingRepository = {
 
   confirmUpgrade: (planId: string) =>
     api.post(`/api/v1/billing/plans/${planId}/confirm-upgrade/`, {}),
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEEDBACK
+// Aligné avec apps/feedback/views.py
+// ══════════════════════════════════════════════════════════════════════════════
+export interface CreateProblemePayload {
+  contenu: string;
+}
+
+export const feedbackRepository = {
+  // Signaler un problème — POST /api/v1/feedback/problemes/
+  createProbleme: (payload: CreateProblemePayload) =>
+    api.post("/api/v1/feedback/problemes/", payload),
+  // Témoignages publics (lecture seule côté PME)
+  getTemoignages: (params?: { featured_landing?: boolean; featured_login?: boolean }) =>
+    api.get("/api/v1/feedback/temoignages/", { params: p(params) })
+      .then((data: unknown) => Array.isArray(data) ? data : (data as { results?: unknown[] }).results ?? []),
 };
 
 // END OF FILE: src/repositories/index.ts
@@ -15486,13 +15530,16 @@ export interface CreateAgencePayload {
 
 export interface Agenda {
   id: string;
-  entreprise: string;
+  agence: string | null;
+  agence_nom: string | null;
   nom: string;
   description: string;
+  bots_ids: string[];
   is_active: boolean;
   created_at: string;
 }
 export interface CreateAgendaPayload {
+  agence?: string;
   nom: string;
   description?: string;
   is_active?: boolean;
@@ -15501,13 +15548,12 @@ export interface CreateAgendaPayload {
 // ══════════════════════════════════════════════════════════════════════════════
 // RENDEZ-VOUS
 // ══════════════════════════════════════════════════════════════════════════════
-export type RendezVousStatut = "en_attente" | "confirme" | "termine" | "annule";
-export type RendezVousCanal = "whatsapp" | "vocal" | "manuel";
 
-export interface RendezVousServiceDetail {
-  service_id: string;
+export interface ServiceRDV {
+  id: number;
+  service: string;
   service_nom: string;
-  prix: number;
+  service_prix: string;
 }
 
 export interface RendezVous {
@@ -15520,39 +15566,33 @@ export interface RendezVous {
   client_nom: string;
   client_telephone: string;
   bot: string | null;
-  statut: RendezVousStatut;
-  canal: RendezVousCanal;
+  statut: "en_attente" | "confirme" | "annule" | "termine";
+  canal: "whatsapp" | "vocal" | "manuel";
   scheduled_at: string;
   reminder_sent: boolean;
   notes: string;
-  services_detail: RendezVousServiceDetail[];
+  services_detail: ServiceRDV[];
   created_at: string;
 }
-
 export interface CreateRendezVousPayload {
   agenda: string;
-  agence?: string;
-  client: string;
-  bot?: string;
-  statut?: RendezVousStatut;
-  canal?: RendezVousCanal;
+  agence?: string | null;
+  client?: string;
+  client_nom?: string;
+  client_telephone?: string;
+  statut?: "en_attente" | "confirme" | "annule" | "termine";
+  canal?: "whatsapp" | "vocal" | "manuel";
   scheduled_at: string;
   notes?: string;
 }
-
 export interface RendezVousFilters {
-  statut?: RendezVousStatut;
-  canal?: RendezVousCanal;
-  agenda?: string;
-  reminder_sent?: boolean;
-  search?: string;
+  statut?: string;
+  canal?: string;
+  date?: string;
   page?: number;
   page_size?: number;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// CLIENT (collecté par le bot)
-// ══════════════════════════════════════════════════════════════════════════════
 export interface Client {
   id: string;
   entreprise: string;
@@ -15561,41 +15601,36 @@ export interface Client {
   email: string;
   created_at: string;
 }
-
 export interface CreateClientPayload {
   nom: string;
   telephone?: string;
   email?: string;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// POLITIQUE DE RAPPEL
-// ══════════════════════════════════════════════════════════════════════════════
-export type CanalRappel = "whatsapp" | "email" | "sms" | "appel";
-
 export interface PolitiqueRappel {
   id: string;
   entreprise: string;
   nom: string;
-  canal: CanalRappel;
+  canal: "whatsapp" | "email" | "sms" | "appel";
   delai_heures: number;
   message_template: string;
   is_active: boolean;
   created_at: string;
 }
-
 export interface CreatePolitiqueRappelPayload {
   nom: string;
-  canal: CanalRappel;
-  delai_heures: number;
+  canal: "whatsapp" | "email" | "sms" | "appel";
+  delai_heures?: number;
   message_template?: string;
   is_active?: boolean;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SUBSCRIPTION / WALLET / PLAN / STATS
+// BILLING
 // ══════════════════════════════════════════════════════════════════════════════
-export type SubscriptionStatus = "actif" | "suspendu" | "resilie" | "essai";
+
+export type SubscriptionStatus = "actif" | "suspendu" | "expire" | "en_attente";
+
 export interface Subscription {
   id: string;
   entreprise: string;
@@ -15639,61 +15674,76 @@ export interface Plan {
   created_at: string;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// STATS
+// Aligné avec apps/dashboard/serializers.py → EntrepriseStatsSerializer
+// Endpoint : GET /api/v1/dashboard/entreprise/
+// ══════════════════════════════════════════════════════════════════════════════
 export interface TenantStats {
-  messages_today: number;
-  messages_week: number;
-  calls_today: number;
-  calls_week: number;
-  appointments_today: number;
-  appointments_week: number;
-  active_conversations: number;
-  emails_sent_week: number;
-  week_data: { day: string; messages: number; calls: number }[];
+  messages_aujourdhui: number;
+  messages_semaine: number;
+  appels_aujourdhui: number;
+  rdv_aujourdhui: number;
+  rdv_semaine: number;
+  conversations_actives: number;
 }
+
+// Aligné avec apps/dashboard/serializers.py → AdminStatsSerializer
+// Endpoint : GET /api/v1/dashboard/admin/
 export interface AdminStats {
-  id: string;
-  total_tenants: number;
-  active_tenants: number;
+  total_entreprises: number;
+  entreprises_actives: number;
   total_bots: number;
-  active_bots: number;
-  total_messages_today: number;
-  total_calls_today: number;
+  bots_actifs: number;
+  total_conversations_aujourdhui: number;
+  total_rdv_aujourdhui: number;
   mrr: number;
-  tenants_growth_week: number;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CONVERSATION
+// Aligné avec apps/conversations/serializers.py → ConversationSerializer
 // ══════════════════════════════════════════════════════════════════════════════
-export interface ConversationReport {
-  summary: string;
-  key_takeaways: string[];
+
+export interface RapportConversation {
+  id: string;
+  conversation: string;
+  resume: string;
+  points_cles: string[];
   actions: { type: string; label: string; detail: string }[];
-  appointment_scheduled: boolean;
-  appointment_id: string | null;
-  human_handoff: boolean;
-  handoff_reason: string | null;
-  services_discussed: string[];
+  tokens_utilises: number;
+  rdv_planifies: number;
+  emails_envoyes: number;
+  transferts_humain: number;
+  created_at: string;
 }
+
 export interface Conversation {
   id: string;
-  tenant_id: string;
-  bot_id: string;
-  client_identifier: string;
-  client_name: string;
-  client_phone: string;
-  client_email: string | null;
-  channel: "whatsapp" | "voice";
-  last_message: string;
-  last_message_at: string;
-  messages_count: number;
-  appointment_id?: string | null;
-  report?: ConversationReport | null;
+  bot: string;
+  bot_nom: string;
+  bot_type: "whatsapp" | "vocal";
+  client: string;
+  client_nom: string;
+  client_telephone: string;
+  type_conversation: string | null;
+  type_label: string | null;
+  agenda: string | null;
+  agenda_nom: string | null;
+  rendez_vous: string | null;
+  statut: "en_cours" | "terminee" | "abandonnee";
+  human_handoff: boolean;
+  dernier_message: string;
+  dernier_message_at: string;
+  nb_messages: number;
+  created_at: string;
+  rapport: RapportConversation | null;
 }
+
 export interface ConversationFilters {
-  tenant_id?: string;
-  bot_id?: string;
-  channel?: string;
+  bot?: string;
+  statut?: string;
+  human_handoff?: boolean;
   page?: number;
   page_size?: number;
 }
