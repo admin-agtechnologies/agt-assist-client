@@ -1,6 +1,11 @@
 ﻿Next.js Project Context
+<<<<<<< HEAD
 Generated On: 2026-04-22 10:56:55
 Root: C:\Users\hp\Documents\gabriel\challenge-agt\agt-assist-client
+=======
+Generated On: 2026-04-22 09:30:04
+Root: C:\Users\mbiam\Desktop\dev\agt_plateforme\agt-assist-client
+>>>>>>> 5ab30431336fd7d98dba3c4b46091922c3fb5b20
 ===============================================
 
 // FILE: db/db.json
@@ -3305,6 +3310,7 @@ import { ROUTES } from "@/lib/constants";
 import { ApiError } from "@/lib/api-client";
 import { authRepository } from "@/repositories";
 import { AuthShell, GoogleButton } from "@/components/auth/AuthShell";
+import { Eye, EyeOff } from "lucide-react"; // Importe les icônes
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
@@ -11518,7 +11524,7 @@ import {
   Check, MessageSquare, Phone, CalendarDays, BarChart3, Smartphone, Globe,
   Sun, Moon, Star, Users, TrendingUp, Clock, Award,
   ChevronLeft, ChevronRight, Play, MapPin, Mail, ArrowRight,
-  Bot, BookOpen, HelpCircle,Zap
+  Bot, BookOpen, HelpCircle, Zap
 } from "lucide-react";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -12266,7 +12272,7 @@ export default function LandingPage() {
               <ul className="space-y-3">
                 <li>
                   <a
-                    href="https://ag-technologies.tech"
+                    href="https://www.ag-technologies.tech/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2.5 text-sm text-white/60 hover:text-[#25D366] transition-colors group"
