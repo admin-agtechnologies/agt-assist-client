@@ -1,6 +1,11 @@
 ﻿Next.js Project Context
+<<<<<<< HEAD
+Generated On: 2026-04-22 10:56:55
+Root: C:\Users\hp\Documents\gabriel\challenge-agt\agt-assist-client
+=======
 Generated On: 2026-04-22 09:30:04
 Root: C:\Users\mbiam\Desktop\dev\agt_plateforme\agt-assist-client
+>>>>>>> 5ab30431336fd7d98dba3c4b46091922c3fb5b20
 ===============================================
 
 // FILE: db/db.json
