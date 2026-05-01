@@ -1,8 +1,169 @@
 Next.js Project Context
-Generated On: 2026-04-29 15:57:28
+Generated On: 2026-05-01 19:19:14
 Root: /home/donpk/AG-technologies/front&back-agt-bot-admin&client/agt-assist-client
 ===============================================
 Génération du fichier de contexte en cours...
+
+// FILE: prompter.sh
+-----------------------------------------------
+#!/bin/bash
+
+# --- Configuration ---
+
+# Default project path if none provided
+DEFAULT_PROJECT_PATH="."
+PROJECT_PATH=${1:-"$DEFAULT_PROJECT_PATH"}
+
+# Output file name (relative to PROJECT_PATH)
+OUTPUT_FILENAME="project_context.txt"
+
+# Directories to completely ignore (won't be traversed)
+EXCLUDE_DIRS_PATTERN=( \
+    ".*"            # All hidden folders (.git, .vscode, .idea, .svn, etc.)
+    "node_modules"
+    "vendor"        # PHP Composer
+    "build"
+    "dist"
+    "target"        # Java/Rust build outputs
+    "__pycache__"   # Python cache
+    ".next"         # Next.js build output
+    "cache"         # General cache folders
+    "target"
+    "venv"
+    "storage"       # Laravel storage (often contains logs, cache, etc.)
+    # Add more directory names here if needed
+)
+
+# Specific file patterns to ignore within traversed directories
+EXCLUDE_FILES_PATTERN=( \
+    "*.log"
+    "*.jar"
+    "*.pdf"
+    "*.png"
+    "*.jpg"
+    "*.class"
+    "*.sqlite"
+    "*.csv"
+    "project_context.txt"
+    # ".env*"       # Consider if you NEED .env files; uncomment if NOT needed.
+    "package-lock.json"
+    "yarn.lock"
+    "composer.lock"
+    "*.ico"
+    "pnpm-lock.yaml"
+    # Add more file patterns here (e.g., "*.swp", "*.bak", "*.tmp")
+)
+
+# --- Script Logic ---
+
+# Attempt to get absolute path; exit if PROJECT_PATH is invalid early
+PROJECT_PATH=$(realpath "$PROJECT_PATH" 2>/dev/null)
+if [ $? -ne 0 ] || [ ! -d "$PROJECT_PATH" ]; then
+    echo "Error: Invalid or non-existent project directory specified." >&2 # Error to stderr
+    exit 1
+fi
+
+OUTPUT_FILE="$PROJECT_PATH/$OUTPUT_FILENAME"
+
+# --- Safety Check: Prevent overwriting the project directory itself ---
+# This is unlikely but guards against strange configurations
+if [ "$PROJECT_PATH" == "$OUTPUT_FILE" ]; then
+    echo "Error: Project directory path conflicts with output file name '$OUTPUT_FILENAME'." >&2
+    exit 1
+fi
+
+# Delete output file silently if it exists
+rm -f "$OUTPUT_FILE"
+
+# --- Build the find command ---
+# Uses arrays to construct the find command safely and avoid complex escaping issues with eval
+find_args=("$PROJECT_PATH")
+
+# Add directory prune conditions
+if [ ${#EXCLUDE_DIRS_PATTERN[@]} -gt 0 ]; then
+    find_args+=(\()
+    first_prune=true
+    for dir_pattern in "${EXCLUDE_DIRS_PATTERN[@]}"; do
+        if ! $first_prune; then
+            find_args+=(-o)
+        fi
+        find_args+=(-name "$dir_pattern" -type d)
+        first_prune=false
+    done
+    find_args+=(\) -prune -o) # Add the prune action and the OR for the next part
+fi
+
+# Add primary find conditions (type file, exclude output file, exclude patterns)
+find_args+=(\( -type f -not -path "$OUTPUT_FILE")
+if [ ${#EXCLUDE_FILES_PATTERN[@]} -gt 0 ]; then
+    for file_pattern in "${EXCLUDE_FILES_PATTERN[@]}"; do
+        find_args+=(-not -name "$file_pattern")
+    done
+fi
+find_args+=(-print \)) # Add the print action and close the group
+
+# --- Execute the find command and process results ---
+
+# Create the header in the output file
+{
+    echo "Project Context From: $PROJECT_PATH"
+    echo "Generated On: $(date)"
+    echo "==============================================="
+    echo "Ignored Directory Patterns: ${EXCLUDE_DIRS_PATTERN[*]}"
+    echo "Ignored File Patterns: ${EXCLUDE_FILES_PATTERN[*]}"
+    echo "==============================================="
+    echo ""
+} > "$OUTPUT_FILE"
+
+error_count=0
+# Use find with process substitution and sorting. Avoids eval.
+while IFS= read -r FILE_PATH; do
+    # Calculate relative path for cleaner output
+    RELATIVE_PATH="${FILE_PATH#"$PROJECT_PATH"/}"
+
+    # Append file info and content to the output file
+    {
+        # echo ""
+        # echo "// ==============================================="
+        # echo "---> FILE: $RELATIVE_PATH"
+        echo "//---> PATH: $FILE_PATH"
+        # echo "// ==============================================="
+        echo ""
+    } >> "$OUTPUT_FILE"
+
+    # Check if file is likely binary/non-text using 'file' command
+    # -b: omit filename; check for common non-text types
+    if file -b "$FILE_PATH" | grep -q -E 'binary|archive|compressed|image|font'; then
+        echo "[Non-text file (e.g., binary, data, compressed) - Contents omitted]" >> "$OUTPUT_FILE"
+    else
+        # Append text file content, redirect cat errors to stderr
+        if ! cat "$FILE_PATH" >> "$OUTPUT_FILE" 2> /dev/null; then # Hide cat errors from stdout
+             # Optionally log error to the output file itself, or just count it
+             echo "[Error reading file content for $RELATIVE_PATH]" >> "$OUTPUT_FILE"
+             ((error_count++))
+        fi
+    fi
+
+    {
+        # echo ""
+        echo "// END OF FILE: $RELATIVE_PATH"
+        echo ""
+    } >> "$OUTPUT_FILE"
+
+done < <(find "${find_args[@]}" | sort) # Execute find command using safe array expansion
+
+# Optionally report errors to stderr if any occurred
+if [ $error_count -gt 0 ]; then
+    echo "Warning: Encountered $error_count errors reading file contents during context generation." >&2
+    # Exit with a non-zero status to indicate partial success/warning
+    exit 1
+fi
+
+# Exit silently on success
+exit 0
+
+
+// END OF FILE: prompter.sh
 
 // FILE: README.md
 -----------------------------------------------
@@ -48,64 +209,6 @@ module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } };
 
 
 // END OF FILE: postcss.config.js
-
-// FILE: handoff.md
------------------------------------------------
-# HANDOFF — Frontend PME (AGT Assist Client) — 18 Avril 2026
-
-## 1. CE QUI A ÉTÉ COMPLÉTÉ
-
-- **[PME-12]** Interface test `/pme/bots/[id]/test/page.tsx` — cockpit de supervision complet : toggle WhatsApp/Vocal, 4 accordéons auto-expand (infos bot, rapport client live, transfert humain, email bot 3 étapes), transcription vocale temps réel
-- **[NAV]** `layout.tsx` — sidebar mise à jour : FAQ retirée de la nav principale, footer enrichi avec "Configuration rapide" (ex-Relancer l'assistant), "Tutoriel interface", "Demander de l'aide"
-- **[ROUTES]** `constants.ts` — `ROUTES.faq` remplacé par `ROUTES.help` + `ROUTES.tutorial`
-- **[I18N]** `fr.ts` + `en.ts` — clés `nav.quickSetup`, `nav.help`, `nav.tutorial`, sections `help` et `tutorial` ajoutées
-- **[PME-HELP]** `/pme/help/page.tsx` — page "Demander de l'aide" avec FAQ statiques AGT Platform (13 questions, 5 catégories, bilingue, filtrable, recherche), bouton chat widget programmatique, bouton WhatsApp AGT
-- **[PME-TUTORIAL]** `/pme/tutorial/page.tsx` — tutoriel interactif 6 étapes avec écran d'accueil, stepper avec progression, illustrations SVG par section, navigation prev/next/skip, bouton "Accéder à cette section"
-- **[WIDGET]** `SupportWidgets.tsx` — ouverture programmatique via `CustomEvent("agt:open-chat")`
-
-## 2. EN COURS (non terminé)
-
-- [ ] Test visuel complet de toutes les pages — à faire à la prochaine session
-- [ ] Vérification `npx tsc --noEmit` sur le dernier fichier `help-page.tsx` installé — à confirmer
-
-## 3. PROCHAINE ÉTAPE IMMÉDIATE
-
-- Remarques sur la landing page `/` — à traiter en priorité
-- Tour complet de la plateforme et signalement des anomalies
-- Suppression de `/pme/faq/page.tsx` si non référencé ailleurs (vérifier avant de supprimer)
-
-## 4. BUGS CONNUS / POINTS D'ATTENTION
-
-- `SupportWidgets.tsx` — numéro WhatsApp `+237600000000` est un placeholder, à remplacer en production
-- `ROUTES.faq` supprimé de `constants.ts` — vérifier qu'aucune autre page ne l'importe encore (notamment `knowledge/page.tsx` qui a un lien "Gérer la FAQ")
-- `tutorial/page.tsx` — clés `d.tutorial.steps[key]` typées dynamiquement, vérifier que TypeScript accepte l'accès par clé string si erreur au prochain TSC
-- Landing page — aucune modification faite cette session, état inconnu
-
-## 5. COMMANDES UTILES
-
-```bash
-npm run dev:mock
-npx tsc --noEmit
-npm run build
-
-
-# Comptes démo
-pharmacie@example.com  → PME tenant t1
-admin@agt.com          → Admin
-
-# URLs clés à tester
-http://localhost:3000/pme/dashboard
-http://localhost:3000/pme/help
-http://localhost:3000/pme/tutorial
-http://localhost:3000/pme/bots/b1/test
-```
-
----
-
-À la prochaine session. Bon test de la plateforme 🎯
-
-
-// END OF FILE: handoff.md
 
 // FILE: .gitignore
 -----------------------------------------------
@@ -2327,7 +2430,11 @@ import type {
   // Platform help
   HelpEntry,
 } from "@/types/api";
-import type { ClaimBonusResponse, OnboardingCheckRequest, OnboardingResponse } from "@/types/onboarding";
+import type {
+  ClaimBonusResponse,
+  OnboardingCheckRequest,
+  OnboardingResponse,
+} from "@/types/onboarding";
 
 // ── Helper params ─────────────────────────────────────────────────────────────
 const p = (f?: object): Record<string, string> =>
@@ -3040,7 +3147,6 @@ export const feedbackRepository = {
 // ONBOARDING
 // ══════════════════════════════════════════════════════════════════════════════
 
-
 export const onboardingRepository = {
   check: (payload: OnboardingCheckRequest): Promise<OnboardingResponse> =>
     api.post<OnboardingResponse>("/api/v1/onboarding/check/", payload),
@@ -3109,6 +3215,41 @@ export const chatbotRepository = {
   /** Détail complet d'une session avec messages et emails imbriqués. */
   getSessionDetail: (sessionId: string): Promise<TestSessionDetail> =>
     api.get<TestSessionDetail>(`/api/v1/chatbot/sessions/${sessionId}/`),
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DIFF À APPLIQUER MANUELLEMENT
+// Fichier cible : src/repositories/index.ts
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── 1. AJOUTER ces imports dans le bloc d'imports en haut du fichier ─────
+//     (à la suite des imports existants venant de @/types/api) :
+
+import type {
+  // ... imports existants ...
+  // ⬇️ AJOUTER CES TROIS LIGNES :
+  WahaStatusResponse,
+  WahaConnectResponse,
+  WahaDisconnectResponse,
+} from "@/types/api";
+
+// ─── 2. AJOUTER ce bloc à la fin du fichier ───────────────────────────────
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WAHA / WHATSAPP — Sessions WhatsApp via WAHA
+// ══════════════════════════════════════════════════════════════════════════════
+export const wahaRepository = {
+  /** GET — Statut courant de la session WhatsApp du bot (inclut qr_base64). */
+  getStatus: (botId: string): Promise<WahaStatusResponse> =>
+    api.get(`/api/v1/bots/${botId}/whatsapp/status/`),
+
+  /** POST — Démarre une session WhatsApp pour le bot (bot doit être publié). */
+  connect: (botId: string): Promise<WahaConnectResponse> =>
+    api.post(`/api/v1/bots/${botId}/whatsapp/connect/`, {}),
+
+  /** POST — Stoppe la session WhatsApp et libère le bot. */
+  disconnect: (botId: string): Promise<WahaDisconnectResponse> =>
+    api.post(`/api/v1/bots/${botId}/whatsapp/disconnect/`, {}),
 };
 
 
@@ -3699,15 +3840,38 @@ export function initials(name: string): string {
 
 export const en = {
   common: {
-    save: "Save", cancel: "Cancel", delete: "Delete", edit: "Edit",
-    add: "Add", close: "Close", loading: "Loading…", error: "An error occurred",
-    confirmTitle: "Are you sure?", confirmDeleteBody: "This action is irreversible.",
-    noData: "No data.", next: "Next", prev: "Previous", search: "Search…",
-    active: "Active", inactive: "Inactive", status: "Status", actions: "Actions",
-    yes: "Yes", no: "No", all: "All", free: "Free",
-    logout: "Logout", settings: "Settings", profile: "Profile",
-    fr: "Français", en: "English", back: "Back", continue: "Continue",
-    confirm: "Confirm", perMonth: "/ month", unlimited: "Unlimited",
+    save: "Save",
+    cancel: "Cancel",
+    delete: "Delete",
+    edit: "Edit",
+    add: "Add",
+    close: "Close",
+    loading: "Loading…",
+    error: "An error occurred",
+    confirmTitle: "Are you sure?",
+    confirmDeleteBody: "This action is irreversible.",
+    noData: "No data.",
+    next: "Next",
+    prev: "Previous",
+    search: "Search…",
+    active: "Active",
+    inactive: "Inactive",
+    status: "Status",
+    actions: "Actions",
+    yes: "Yes",
+    no: "No",
+    all: "All",
+    free: "Free",
+    logout: "Logout",
+    settings: "Settings",
+    profile: "Profile",
+    fr: "Français",
+    en: "English",
+    back: "Back",
+    continue: "Continue",
+    confirm: "Confirm",
+    perMonth: "/ month",
+    unlimited: "Unlimited",
     recommended: "Recommended",
     espacePME: "PME Space",
     lightMode: "Light mode",
@@ -3717,9 +3881,15 @@ export const en = {
   },
 
   nav: {
-    dashboard: "Dashboard", bots: "My Bots", services: "Services",
-    appointments: "Appointments", billing: "Billing", profile: "My Profile",
-    faq: "FAQ", providers: "Providers", subscriptions: "Subscriptions",
+    dashboard: "Dashboard",
+    bots: "My Bots",
+    services: "Services",
+    appointments: "Appointments",
+    billing: "Billing",
+    profile: "My Profile",
+    faq: "FAQ",
+    providers: "Providers",
+    subscriptions: "Subscriptions",
     restartOnboarding: "Restart assistant",
     quickSetup: "Quick setup",
     help: "Get help",
@@ -3732,8 +3902,10 @@ export const en = {
   auth: {
     loginTitle: "Access your workspace",
     loginSubtitle: "Manage your virtual assistants from your dashboard.",
-    email: "Email address", password: "Password",
-    loginBtn: "Sign in", loggingIn: "Signing in…",
+    email: "Email address",
+    password: "Password",
+    loginBtn: "Sign in",
+    loggingIn: "Signing in…",
     loginError: "Invalid email or password.",
     orContinueWith: "Or continue with",
     googleBtn: "Continue with Google",
@@ -3744,10 +3916,13 @@ export const en = {
     forgotPasswordTitle: "Reset your password",
     forgotPasswordSubtitle: "Enter your email and we'll send you a reset link.",
     forgotPasswordBtn: "Send reset link",
-    forgotPasswordSent: "If your email exists in our system, then you have received an email.",
+    forgotPasswordSent:
+      "If your email exists in our system, then you have received an email.",
     backToLogin: "Back to login",
-    noAccount: "Don't have an account?", signUp: "Create account",
-    tabPassword: "Password", tabMagicLink: "Magic link",
+    noAccount: "Don't have an account?",
+    signUp: "Create account",
+    tabPassword: "Password",
+    tabMagicLink: "Magic link",
     pmeHint: "SME: pharmacie@example.com / any password",
     adminHint: "Admin: admin@agt.com / any password",
   },
@@ -3755,26 +3930,34 @@ export const en = {
   landing: {
     heroTitle: "Your virtual assistant,",
     heroTitleAccent: "ready in 5 minutes.",
-    heroSubtitle: "AGT Platform gives every Cameroonian business an intelligent WhatsApp and voice assistant, available 24/7, to respond to customers, manage appointments and boost your sales.",
+    heroSubtitle:
+      "AGT Platform gives every Cameroonian business an intelligent WhatsApp and voice assistant, available 24/7, to respond to customers, manage appointments and boost your sales.",
     feature1Title: "WhatsApp Assistant",
-    feature1Desc: "Automatically respond to your customers on WhatsApp, 24/7. Automatic reminders included.",
+    feature1Desc:
+      "Automatically respond to your customers on WhatsApp, 24/7. Automatic reminders included.",
     feature2Title: "AI Voice Agent",
-    feature2Desc: "Handle incoming calls with a natural AI voice, without picking up the phone.",
+    feature2Desc:
+      "Handle incoming calls with a natural AI voice, without picking up the phone.",
     feature3Title: "Automatic Appointments",
-    feature3Desc: "Customers book, modify and receive reminders via WhatsApp or email — with no manual intervention.",
+    feature3Desc:
+      "Customers book, modify and receive reminders via WhatsApp or email — with no manual intervention.",
     feature4Title: "Dashboard",
-    feature4Desc: "Track your conversations, appointments and performance in real time.",
+    feature4Desc:
+      "Track your conversations, appointments and performance in real time.",
     feature5Title: "Multi-channel",
-    feature5Desc: "WhatsApp, voice and email in one platform, accessible from any device.",
+    feature5Desc:
+      "WhatsApp, voice and email in one platform, accessible from any device.",
     feature6Title: "Flexible Payments",
-    feature6Desc: "Pay via Mobile Money (Orange Money, MTN MoMo) or international bank card. No bank account required.",
+    feature6Desc:
+      "Pay via Mobile Money (Orange Money, MTN MoMo) or international bank card. No bank account required.",
     heroCta: "Get started now",
     heroCtaSub: "First month covered by your welcome bonus",
     plansTitle: "Pricing designed for Cameroon",
     plansSubtitle: "Start with Starter, grow at your own pace.",
     ctaTitle: "Ready to transform your customer relationships?",
     ctaBtn: "Create my account",
-    loginCta: "Already have an account?", loginLink: "Sign in",
+    loginCta: "Already have an account?",
+    loginLink: "Sign in",
     welcomeBadge: "{amount} offered at registration",
     featuresTitle: "Features designed for Cameroon",
     footerRights: "AGT Technologies. All rights reserved.",
@@ -3786,16 +3969,20 @@ export const en = {
 
     demoTag: "See the platform",
     demoTitle: "Discover AGT Platform in action",
-    demoSubtitle: "See how our SME clients manage their virtual assistants daily.",
+    demoSubtitle:
+      "See how our SME clients manage their virtual assistants daily.",
     demoPlay: "Play video",
 
     testimonialsTag: "They trust us",
     testimonialsTitle: "What our clients say",
-    testimonialsSubtitle: "Cameroonian SMEs who transformed their customer service with AGT Platform.",
+    testimonialsSubtitle:
+      "Cameroonian SMEs who transformed their customer service with AGT Platform.",
 
-    ctaSubtitle: "Join over 500 Cameroonian businesses that trust AGT Platform.",
+    ctaSubtitle:
+      "Join over 500 Cameroonian businesses that trust AGT Platform.",
 
-    footerTagline: "The intelligent virtual assistant for African SMEs — WhatsApp & AI voice.",
+    footerTagline:
+      "The intelligent virtual assistant for African SMEs — WhatsApp & AI voice.",
     footerProduct: "Product",
     footerResources: "Resources",
     footerGroup: "AG Technologies Group",
@@ -3835,7 +4022,8 @@ export const en = {
     welcomeGiftDesc: "Your wallet has been credited with 10,000 XAF!",
     welcomeGiftSub: "Use it to activate your first subscription.",
     profileTitle: "Tell us about your business",
-    profileSubtitle: "This information helps your assistant respond better to your customers.",
+    profileSubtitle:
+      "This information helps your assistant respond better to your customers.",
     emailCheckTitle: "Check your email",
     emailCheckSubtitle: "A confirmation link was sent to",
     emailCheckWaiting: "Verifying…",
@@ -3854,10 +4042,16 @@ export const en = {
       fullName: "Your full name",
     },
     sectors: {
-      sante: "Healthcare", juridique: "Legal", beaute: "Beauty & Wellness",
-      restauration: "Food & Restaurants", commerce: "Commerce & Retail",
-      education: "Education & Training", immobilier: "Real Estate",
-      transport: "Transport & Logistics", finance: "Finance & Insurance", autre: "Other",
+      sante: "Healthcare",
+      juridique: "Legal",
+      beaute: "Beauty & Wellness",
+      restauration: "Food & Restaurants",
+      commerce: "Commerce & Retail",
+      education: "Education & Training",
+      immobilier: "Real Estate",
+      transport: "Transport & Logistics",
+      finance: "Finance & Insurance",
+      autre: "Other",
     },
     planTitle: "Choose your subscription",
     planSubtitle: "You can change your plan at any time from your account.",
@@ -3868,7 +4062,8 @@ export const en = {
     paymentInsufficient: "Insufficient balance for this plan.",
     paymentSuccess: "Payment successful!",
     successTitle: "Your assistant is ready!",
-    successSubtitle: "Your Bot Pack has been activated. Welcome to AGT Platform.",
+    successSubtitle:
+      "Your Bot Pack has been activated. Welcome to AGT Platform.",
     successBtn: "Go to my dashboard",
     selectedPlan: "Selected plan",
     walletBalance: "Wallet balance",
@@ -3878,7 +4073,8 @@ export const en = {
 
   pending: {
     title: "Verify your email",
-    subtitle: "A confirmation link has been sent to your email address. Click it to continue.",
+    subtitle:
+      "A confirmation link has been sent to your email address. Click it to continue.",
     resendBtn: "Resend verification email",
     backToLogin: "Back to login",
     resendSuccess: "Email sent! Check your inbox.",
@@ -3918,14 +4114,16 @@ export const en = {
     successTitle: "Welcome back ✓",
     successSubtitle: "You're signed in. Redirecting…",
     errorTitle: "Invalid link",
-    errorSubtitle: "Magic links expire after 15 minutes. Request a new one from the login page.",
+    errorSubtitle:
+      "Magic links expire after 15 minutes. Request a new one from the login page.",
     errorMissingToken: "No magic token provided.",
     errorGeneric: "This magic link is no longer valid.",
     backToLogin: "Back to login",
   },
   errors: {
     notFoundTitle: "Page not found",
-    notFoundSubtitle: "The page you're looking for doesn't exist or has been moved.",
+    notFoundSubtitle:
+      "The page you're looking for doesn't exist or has been moved.",
     notFoundBtn: "Back to home",
     errorTitle: "Something went wrong",
     errorSubtitle: "An unexpected error occurred. Please try again.",
@@ -3934,13 +4132,18 @@ export const en = {
 
   dashboard: {
     pme: {
-      title: "Dashboard", welcome: "Hello",
+      title: "Dashboard",
+      welcome: "Hello",
       subtitle: "Here is your virtual assistant activity.",
-      messagesToday: "Messages today", callsToday: "Calls today",
-      appointmentsToday: "Appointments today", activeConversations: "Active conversations",
-      thisWeek: "This week", recentConversations: "Recent conversations",
+      messagesToday: "Messages today",
+      callsToday: "Calls today",
+      appointmentsToday: "Appointments today",
+      activeConversations: "Active conversations",
+      thisWeek: "This week",
+      recentConversations: "Recent conversations",
       noConversations: "No recent conversations.",
-      channel_whatsapp: "WhatsApp", channel_voice: "Voice",
+      channel_whatsapp: "WhatsApp",
+      channel_voice: "Voice",
       quickLinks: "Quick access",
       subscription: "My subscription",
       usageMessages: "Messages used",
@@ -3964,23 +4167,36 @@ export const en = {
     settingsTab: "Settings",
     settingsSave: "Save",
     settingsSaved: "Settings saved!",
-    title: "My Bots", subtitle: "Manage your virtual assistants.",
+    title: "My Bots",
+    subtitle: "Manage your virtual assistants.",
     newBtn: "New bot",
     errorLoad: "Error loading bots.",
     createSuccess: "Bot created successfully!",
-    deleteSuccess: "Bot deleted.", deleteError: "Error deleting bot.",
+    deleteSuccess: "Bot deleted.",
+    deleteError: "Error deleting bot.",
     confirmDelete: "Permanently delete this bot?",
     noData: "No bots configured.",
-    statusActive: "Active", statusPaused: "Paused", statusArchived: "Archived",
-    providerWaha: "WAHA", providerMeta: "Meta API",
-    providerGemini: "Gemini", providerOpenAI: "OpenAI",
+    statusActive: "Active",
+    statusPaused: "Paused",
+    statusArchived: "Archived",
+    providerWaha: "WAHA",
+    providerMeta: "Meta API",
+    providerGemini: "Gemini",
+    providerOpenAI: "OpenAI",
     filters: { searchPlaceholder: "Search a bot…", allStatuses: "All" },
-    table: { name: "Name", whatsapp: "WhatsApp", voice: "Voice AI", status: "Status", date: "Created" },
+    table: {
+      name: "Name",
+      whatsapp: "WhatsApp",
+      voice: "Voice AI",
+      status: "Status",
+      date: "Created",
+    },
     // ── Publish ───────────────────────────────────────────────────────────────────
     publish: "Publish bot",
     unpublish: "Unpublish",
     publishConfirm: "Publish this bot? Customers will be able to access it.",
-    unpublishConfirm: "Unpublish this bot? Customers will no longer have access.",
+    unpublishConfirm:
+      "Unpublish this bot? Customers will no longer have access.",
     publishSuccess: "Bot published successfully!",
     unpublishSuccess: "Bot unpublished.",
     publishError: "Error publishing bot.",
@@ -4035,12 +4251,18 @@ export const en = {
     testUnpublishedBadge: "Offline",
     // ── Modal ──────────────────────────────────────────────────────────────────────
     modal: {
-      createTitle: "New Bot", editTitle: "Edit Bot",
-      btnCreate: "Create bot", btnUpdate: "Update",
+      createTitle: "New Bot",
+      editTitle: "Edit Bot",
+      btnCreate: "Create bot",
+      btnUpdate: "Update",
       fields: {
-        name: "Bot name", welcome: "Welcome message", personality: "Personality",
-        languages: "Languages", whatsappProvider: "WhatsApp provider",
-        voiceProvider: "Voice AI provider", isActive: "Activate immediately",
+        name: "Bot name",
+        welcome: "Welcome message",
+        personality: "Personality",
+        languages: "Languages",
+        whatsappProvider: "WhatsApp provider",
+        voiceProvider: "Voice AI provider",
+        isActive: "Activate immediately",
       },
     },
     // ── Test sessions & config ─────────────────────────────────────────────────
@@ -4063,72 +4285,196 @@ export const en = {
     testEmailsSent: "Email(s) sent",
     testHandoffAlert: "Human handoff triggered",
     testResetSession: "Reset session",
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DIFF À APPLIQUER MANUELLEMENT
+    // Fichier cible : src/dictionaries/en.ts
+    // Action        : AJOUTER le bloc `whatsapp:` à l'intérieur de l'objet `bots: { ... }`
+    //                 (les MÊMES CLÉS que dans fr.ts — sinon erreur TypeScript).
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ─────── À COLLER À L'INTÉRIEUR DE bots: { ... } ───────────────────────────
+
+    whatsapp: {
+      // Panel
+      panelTitle: "WhatsApp Connection",
+      panelSubtitle: "Link this bot to your WhatsApp account",
+
+      // Statuses
+      statusStopped: "Disconnected",
+      statusStarting: "Starting…",
+      statusScanQR: "Awaiting scan",
+      statusWorking: "Connected",
+      statusFailed: "Failed",
+
+      // Initial description
+      descriptionStopped:
+        "Link your WhatsApp number to this bot so it can automatically receive and reply to incoming messages.",
+
+      // Buttons
+      connectButton: "Connect WhatsApp",
+      disconnectButton: "Disconnect",
+      retryButton: "Retry",
+
+      // Disconnect confirmation
+      disconnectConfirmTitle: "Disconnect WhatsApp?",
+      disconnectConfirmBody:
+        "The bot won't receive any WhatsApp messages until it is reconnected.",
+      disconnectConfirmButton: "Yes, disconnect",
+      disconnectSuccess: "WhatsApp bot disconnected.",
+
+      // Bot not published
+      notPublishedTitle: "Bot not published",
+      notPublishedMessage:
+        "You must publish this bot before linking it to a WhatsApp account.",
+      errorBotNotPublished:
+        "This bot must be published before connecting it to WhatsApp.",
+
+      // Starting
+      startingMessage: "Starting the connection… please wait.",
+      qrGenerating: "Generating QR code…",
+
+      // QR code
+      qrAlt: "WhatsApp QR code to scan",
+      qrInstructionsTitle: "How to scan the QR code",
+      qrStep1: "Open WhatsApp on your phone",
+      qrStep2: "Go to Settings → Linked devices",
+      qrStep3: 'Tap "Link a device" and scan this QR code',
+      qrExpireHint:
+        "The QR code expires after ~20 seconds. It refreshes automatically.",
+
+      // Connected
+      phoneLabel: "Connected number",
+      connectedAtLabel: "Connected at",
+      workingNote:
+        "This bot now automatically receives WhatsApp messages and replies using its AI. All exchanges are saved in the Conversations tab.",
+
+      // Info / Help
+      infoLabel: "Info:",
+      singleSessionInfo:
+        "Only one WhatsApp bot can be connected at a time on the platform.",
+    },
   },
 
   services: {
-    title: "Services", subtitle: "Services offered by your assistant.",
+    title: "Services",
+    subtitle: "Services offered by your assistant.",
     newBtn: "New service",
-    errorLoad: "Error loading.", createSuccess: "Service created!",
-    deleteSuccess: "Service deleted.", deleteError: "Delete error.",
+    errorLoad: "Error loading.",
+    createSuccess: "Service created!",
+    deleteSuccess: "Service deleted.",
+    deleteError: "Delete error.",
     confirmDelete: "Delete this service?",
-    noData: "No services configured.", free: "Free",
-    table: { name: "Name", description: "Description", price: "Price", duration: "Duration", status: "Status" },
+    noData: "No services configured.",
+    free: "Free",
+    table: {
+      name: "Name",
+      description: "Description",
+      price: "Price",
+      duration: "Duration",
+      status: "Status",
+    },
     modal: {
-      createTitle: "New Service", editTitle: "Edit Service",
-      btnCreate: "Create", btnUpdate: "Update",
-      fields: { name: "Name", description: "Description", price: "Price (XAF)", duration: "Duration (min)", isActive: "Active" },
+      createTitle: "New Service",
+      editTitle: "Edit Service",
+      btnCreate: "Create",
+      btnUpdate: "Update",
+      fields: {
+        name: "Name",
+        description: "Description",
+        price: "Price (XAF)",
+        duration: "Duration (min)",
+        isActive: "Active",
+      },
     },
   },
 
   appointments: {
-    title: "Appointments", subtitle: "All appointments booked via your assistant.",
+    title: "Appointments",
+    subtitle: "All appointments booked via your assistant.",
     newBtn: "New appointment",
-    errorLoad: "Error loading.", createSuccess: "Appointment created!",
-    deleteSuccess: "Appointment deleted.", deleteError: "Delete error.",
+    errorLoad: "Error loading.",
+    createSuccess: "Appointment created!",
+    deleteSuccess: "Appointment deleted.",
+    deleteError: "Delete error.",
     confirmDelete: "Delete this appointment?",
     noData: "No appointments for this period.",
-    statuses: { pending: "Pending", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled" },
+    statuses: {
+      pending: "Pending",
+      confirmed: "Confirmed",
+      done: "Done",
+      cancelled: "Cancelled",
+    },
     channels: { whatsapp: "WhatsApp", voice: "Voice", manual: "Manual" },
-    table: { client: "Client", service: "Service", date: "Date & Time", channel: "Channel", status: "Status" },
+    table: {
+      client: "Client",
+      service: "Service",
+      date: "Date & Time",
+      channel: "Channel",
+      status: "Status",
+    },
     // ── Agenda ────────────────────────────────────────────────────────────────
-    viewWeek: "Week", viewDay: "Day",
+    viewWeek: "Week",
+    viewDay: "Day",
     today: "Today",
-    prevWeek: "Previous week", nextWeek: "Next week",
-    prevDay: "Previous day", nextDay: "Next day",
+    prevWeek: "Previous week",
+    nextWeek: "Next week",
+    prevDay: "Previous day",
+    nextDay: "Next day",
     noSlots: "No appointments this day.",
     slotFree: "Free slot",
     // ── Config slots ──────────────────────────────────────────────────────────
     configTitle: "Slot configuration",
-    configSubtitle: "The bot uses these settings to suggest available time slots.",
-    durationLabel: "Appointment duration", durationUnit: "min",
-    bufferLabel: "Buffer between appointments", bufferUnit: "min",
+    configSubtitle:
+      "The bot uses these settings to suggest available time slots.",
+    durationLabel: "Appointment duration",
+    durationUnit: "min",
+    bufferLabel: "Buffer between appointments",
+    bufferUnit: "min",
     configSaved: "Configuration saved.",
     // ── Detail ────────────────────────────────────────────────────────────────
     detailTitle: "Appointment detail",
-    detailClient: "Client", detailPhone: "Phone",
-    detailService: "Service", detailDate: "Date & time",
-    detailChannel: "Channel", detailNotes: "Notes",
+    detailClient: "Client",
+    detailPhone: "Phone",
+    detailService: "Service",
+    detailDate: "Date & time",
+    detailChannel: "Channel",
+    detailNotes: "Notes",
     detailStatus: "Status",
     // ── Modal ─────────────────────────────────────────────────────────────────
     modal: {
-      createTitle: "New Appointment", editTitle: "Edit Appointment",
-      btnCreate: "Create", btnUpdate: "Update",
+      createTitle: "New Appointment",
+      editTitle: "Edit Appointment",
+      btnCreate: "Create",
+      btnUpdate: "Update",
       fields: {
-        service: "Service", clientName: "Client name", clientPhone: "Phone",
-        clientEmail: "Email (optional)", scheduledAt: "Date and time",
-        status: "Status", notes: "Notes",
+        service: "Service",
+        clientName: "Client name",
+        clientPhone: "Phone",
+        clientEmail: "Email (optional)",
+        scheduledAt: "Date and time",
+        status: "Status",
+        notes: "Notes",
       },
     },
   },
 
   billing: {
-    title: "Billing", subtitle: "Your subscription and wallet.",
-    currentPlan: "Current plan", renewsOn: "Renews on",
-    messagesUsage: "Messages used", callsUsage: "Calls used",
-    walletBalance: "Wallet balance", topUp: "Top up",
-    statusActive: "Active", statusSuspended: "Suspended", statusCancelled: "Cancelled",
-    changePlan: "Change plan", availablePlans: "Available plans",
-    monthly: "/ month", features: "Included features",
+    title: "Billing",
+    subtitle: "Your subscription and wallet.",
+    currentPlan: "Current plan",
+    renewsOn: "Renews on",
+    messagesUsage: "Messages used",
+    callsUsage: "Calls used",
+    walletBalance: "Wallet balance",
+    topUp: "Top up",
+    statusActive: "Active",
+    statusSuspended: "Suspended",
+    statusCancelled: "Cancelled",
+    changePlan: "Change plan",
+    availablePlans: "Available plans",
+    monthly: "/ month",
+    features: "Included features",
     currentPlanBadge: "Current plan",
     // ── Top up ───────────────────────────────────────────────────────────────────
     topUpTitle: "Top up wallet",
@@ -4157,8 +4503,10 @@ export const en = {
     // ── History ──────────────────────────────────────────────────────────────────
     historyTitle: "Transaction history",
     historyEmpty: "No transactions.",
-    historyCredit: "Credit", historyDebit: "Debit",
-    historyOperatorOrange: "Orange Money", historyOperatorMtn: "MTN MoMo",
+    historyCredit: "Credit",
+    historyDebit: "Debit",
+    historyOperatorOrange: "Orange Money",
+    historyOperatorMtn: "MTN MoMo",
     historyOperatorSystem: "System",
     historyReference: "Ref.",
     topUpModalTitle: "Top up wallet",
@@ -4166,72 +4514,126 @@ export const en = {
     tabCode: "Recharge code",
     tabMobile: "Mobile Money",
     codeHowToTitle: "How to get a code?",
-    codeHowToDesc: "Contact the AGT Technologies team, make your payment in cash or via Orange Money / MTN MoMo, and receive your unique code by SMS or WhatsApp.",
+    codeHowToDesc:
+      "Contact the AGT Technologies team, make your payment in cash or via Orange Money / MTN MoMo, and receive your unique code by SMS or WhatsApp.",
     codeContactBtn: "Contact AGT on WhatsApp",
     codeLabel: "Your recharge code",
     codePlaceholder: "AGT-XXXX-XXXX",
     codeHint: "The code is case-insensitive",
-    codeSecurityMsg: "Each code is single-use and tracked. Any fraudulent use attempt is recorded.",
+    codeSecurityMsg:
+      "Each code is single-use and tracked. Any fraudulent use attempt is recorded.",
     codeApplyBtn: "Apply code",
     codeVerifying: "Verifying…",
     codeSuccessNewBalance: "New balance",
     mobileSoonTitle: "Coming soon",
-    mobileSoonDesc: "Direct payment via Orange Money and MTN MoMo will be available very soon.",
+    mobileSoonDesc:
+      "Direct payment via Orange Money and MTN MoMo will be available very soon.",
     mobileSoonRedirect: "In the meantime, use the",
     mobileSoonRedirectLink: "Recharge code",
   },
 
   faq: {
-    title: "FAQ", subtitle: "Frequently asked questions from your customers.",
+    title: "FAQ",
+    subtitle: "Frequently asked questions from your customers.",
     newBtn: "New question",
-    errorLoad: "Error loading.", createSuccess: "Question created!",
-    deleteSuccess: "Question deleted.", deleteError: "Delete error.",
+    errorLoad: "Error loading.",
+    createSuccess: "Question created!",
+    deleteSuccess: "Question deleted.",
+    deleteError: "Delete error.",
     confirmDelete: "Delete this question?",
     noData: "No questions configured.",
     modal: {
-      createTitle: "New question", editTitle: "Edit question",
-      btnCreate: "Create", btnUpdate: "Update",
+      createTitle: "New question",
+      editTitle: "Edit question",
+      btnCreate: "Create",
+      btnUpdate: "Update",
       fields: {
-        questionFr: "Question (FR)", questionEn: "Question (EN)",
-        answerFr: "Answer (FR)", answerEn: "Answer (EN)",
-        category: "Category", isActive: "Active",
+        questionFr: "Question (FR)",
+        questionEn: "Question (EN)",
+        answerFr: "Answer (FR)",
+        answerEn: "Answer (EN)",
+        category: "Category",
+        isActive: "Active",
       },
     },
   },
 
   tenants: {
-    title: "Companies", subtitle: "All companies subscribed to the platform.",
+    title: "Companies",
+    subtitle: "All companies subscribed to the platform.",
     newBtn: "New company",
-    errorLoad: "Error loading.", createSuccess: "Company created!",
-    deleteSuccess: "Company deleted.", deleteError: "Delete error.",
+    errorLoad: "Error loading.",
+    createSuccess: "Company created!",
+    deleteSuccess: "Company deleted.",
+    deleteError: "Delete error.",
     confirmDelete: "Delete this company? All its data will be lost.",
     noData: "No companies.",
-    table: { name: "Name", sector: "Sector", subscription: "Subscription", status: "Status", date: "Created" },
+    table: {
+      name: "Name",
+      sector: "Sector",
+      subscription: "Subscription",
+      status: "Status",
+      date: "Created",
+    },
     modal: {
-      createTitle: "New Company", editTitle: "Edit Company",
-      btnCreate: "Create", btnUpdate: "Update",
-      fields: { name: "Name", slug: "Slug", sector: "Sector", description: "Description", whatsapp: "WhatsApp number", phone: "Phone", isActive: "Active" },
+      createTitle: "New Company",
+      editTitle: "Edit Company",
+      btnCreate: "Create",
+      btnUpdate: "Update",
+      fields: {
+        name: "Name",
+        slug: "Slug",
+        sector: "Sector",
+        description: "Description",
+        whatsapp: "WhatsApp number",
+        phone: "Phone",
+        isActive: "Active",
+      },
     },
   },
 
   providers: {
-    title: "Providers", subtitle: "External service provider configuration.",
-    errorLoad: "Load error.", updateSuccess: "Provider updated.",
-    types: { whatsapp: "WhatsApp", voice_ai: "Voice AI", phone_operator: "Phone Operator" },
+    title: "Providers",
+    subtitle: "External service provider configuration.",
+    errorLoad: "Load error.",
+    updateSuccess: "Provider updated.",
+    types: {
+      whatsapp: "WhatsApp",
+      voice_ai: "Voice AI",
+      phone_operator: "Phone Operator",
+    },
     table: { provider: "Provider", type: "Type", status: "Status" },
   },
 
   subscriptions: {
-    title: "Subscriptions", subtitle: "All company subscriptions.",
-    errorLoad: "Load error.", noData: "No subscriptions.",
-    statuses: { active: "Active", suspended: "Suspended", cancelled: "Cancelled", trial: "Trial" },
-    table: { tenant: "Company", plan: "Plan", status: "Status", usage: "Usage", renewal: "Renewal" },
+    title: "Subscriptions",
+    subtitle: "All company subscriptions.",
+    errorLoad: "Load error.",
+    noData: "No subscriptions.",
+    statuses: {
+      active: "Active",
+      suspended: "Suspended",
+      cancelled: "Cancelled",
+      trial: "Trial",
+    },
+    table: {
+      tenant: "Company",
+      plan: "Plan",
+      status: "Status",
+      usage: "Usage",
+      renewal: "Renewal",
+    },
   },
 
   profile: {
-    title: "My Profile", subtitle: "Your account information.",
-    name: "Full name", email: "Email", role: "Role", tenant: "Company",
-    saveSuccess: "Profile updated.", saveError: "Save error.",
+    title: "My Profile",
+    subtitle: "Your account information.",
+    name: "Full name",
+    email: "Email",
+    role: "Role",
+    tenant: "Company",
+    saveSuccess: "Profile updated.",
+    saveError: "Save error.",
     roles: { pme: "enterprise Manager" },
     editProfile: "EDIT PROFILE",
     changePassword: "CHANGE PASSWORD",
@@ -4258,27 +4660,48 @@ export const en = {
     agtBotSubtitle: "Chat with us on WhatsApp",
   },
   knowledge: {
-    title: "Knowledge base", subtitle: "Everything your assistant needs to know about your business.",
-    tabGeneral: "General info", tabLocations: "Locations", tabFaq: "FAQ", tabServices: "Services & Pricing",
+    title: "Knowledge base",
+    subtitle: "Everything your assistant needs to know about your business.",
+    tabGeneral: "General info",
+    tabLocations: "Locations",
+    tabFaq: "FAQ",
+    tabServices: "Services & Pricing",
     botSection: "Virtual assistant & Branding",
-    welcomeMessage: "Welcome message", botTone: "Communication tone",
-    toneFormal: "Formal", toneSemiFormal: "Semi-formal", toneCasual: "Casual", toneInherit: "Inherit from general",
-    botPersonality: "Bot personality", botLanguages: "Bot languages", botSignature: "Auto signature",
+    welcomeMessage: "Welcome message",
+    botTone: "Communication tone",
+    toneFormal: "Formal",
+    toneSemiFormal: "Semi-formal",
+    toneCasual: "Casual",
+    toneInherit: "Inherit from general",
+    botPersonality: "Bot personality",
+    botLanguages: "Bot languages",
+    botSignature: "Auto signature",
     slogan: "Company slogan",
     contactSection: "Main contacts",
-    contactWhatsapp: "WhatsApp", contactPhone: "Phone", contactEmail: "Email", website: "Website",
+    contactWhatsapp: "WhatsApp",
+    contactPhone: "Phone",
+    contactEmail: "Email",
+    website: "Website",
     transferSection: "Transfer to human",
-    transferSubtitle: "When the bot can't answer, it transfers to these contacts.",
-    transferWhatsapp: "Transfer WhatsApp", transferPhone: "Transfer phone",
-    transferEmail: "Transfer email", transferMessage: "Transfer message",
+    transferSubtitle:
+      "When the bot can't answer, it transfers to these contacts.",
+    transferWhatsapp: "Transfer WhatsApp",
+    transferPhone: "Transfer phone",
+    transferEmail: "Transfer email",
+    transferMessage: "Transfer message",
     extraInfo: "Additional information",
-    hoursOpening: "Opening hours", hoursAppointments: "Appointment reception hours",
+    hoursOpening: "Opening hours",
+    hoursAppointments: "Appointment reception hours",
     saveSuccess: "Saved successfully.",
-    addLocation: "Add location", editLocation: "Edit location",
-    locationName: "Location name", locationAddress: "Address",
-    locationDeleted: "Location deleted.", locationDeleteConfirm: "Delete this location?",
+    addLocation: "Add location",
+    editLocation: "Edit location",
+    locationName: "Location name",
+    locationAddress: "Address",
+    locationDeleted: "Location deleted.",
+    locationDeleteConfirm: "Delete this location?",
     noLocations: "No locations configured.",
-    faqCount: "questions configured", manageFaq: "Manage FAQ",
+    faqCount: "questions configured",
+    manageFaq: "Manage FAQ",
     manageServices: "Manage services",
     serviceWelcomeMessage: "Specific welcome message",
     serviceBotDescription: "Bot description",
@@ -4312,13 +4735,16 @@ export const en = {
     errorLoad: "Error loading FAQ.",
     categories: { all: "All" },
   },
-  
+
   tutorial: {
     title: "Interface tutorial",
-    subtitle: "Discover all the features of your AGT workspace, section by section.",
+    subtitle:
+      "Discover all the features of your AGT workspace, section by section.",
     startBtn: "Start tutorial",
-    nextBtn: "Next", prevBtn: "Previous",
-    finishBtn: "Finish", skipBtn: "Skip",
+    nextBtn: "Next",
+    prevBtn: "Previous",
+    finishBtn: "Finish",
+    skipBtn: "Skip",
     stepOf: "of",
     sections: "sections",
     goToSection: "Go to this section",
@@ -4329,24 +4755,58 @@ export const en = {
       support: "Support",
     },
     steps: {
-      dashboard: { title: "Your dashboard", desc: "View your messages, calls, appointments and active conversations in real time. This is your control center." },
-      bots: { title: "Your Bots", desc: "Create and configure your WhatsApp and voice assistants. Test them before publishing to your customers." },
-      knowledge: { title: "Knowledge base", desc: "Enter your business information: hours, services, locations, FAQ. Your bot uses this to answer precisely." },
-      appointments: { title: "Agenda & Appointments", desc: "Track all appointments booked automatically by your bot. Configure available slots based on your hours." },
-      services: { title: "Your Services", desc: "Create your offerings with name, price and duration. Your bot uses them to inform customers and book appointments." },
-      billing: { title: "Billing & Wallet", desc: "Top up your wallet via Orange Money or MTN MoMo, and manage your subscription with ease." },
-      profile: { title: "My Profile", desc: "Customize your account information and preferences for your PME workspace." },
-      test: { title: "Test your bot", desc: "Simulate a real WhatsApp conversation or voice call to verify your assistant's behavior before publishing." },
-      help: { title: "Help & Documentation", desc: "Access documentation, video tutorials and direct support. Our team is available to guide you." },
-      feedback: { title: "Leave a testimonial", desc: "Share your experience with AGT Platform. Your feedback helps other entrepreneurs discover the platform." },
-      bug: { title: "Report an issue", desc: "Found a bug? Describe it here and our technical team will be notified immediately." },
+      dashboard: {
+        title: "Your dashboard",
+        desc: "View your messages, calls, appointments and active conversations in real time. This is your control center.",
+      },
+      bots: {
+        title: "Your Bots",
+        desc: "Create and configure your WhatsApp and voice assistants. Test them before publishing to your customers.",
+      },
+      knowledge: {
+        title: "Knowledge base",
+        desc: "Enter your business information: hours, services, locations, FAQ. Your bot uses this to answer precisely.",
+      },
+      appointments: {
+        title: "Agenda & Appointments",
+        desc: "Track all appointments booked automatically by your bot. Configure available slots based on your hours.",
+      },
+      services: {
+        title: "Your Services",
+        desc: "Create your offerings with name, price and duration. Your bot uses them to inform customers and book appointments.",
+      },
+      billing: {
+        title: "Billing & Wallet",
+        desc: "Top up your wallet via Orange Money or MTN MoMo, and manage your subscription with ease.",
+      },
+      profile: {
+        title: "My Profile",
+        desc: "Customize your account information and preferences for your PME workspace.",
+      },
+      test: {
+        title: "Test your bot",
+        desc: "Simulate a real WhatsApp conversation or voice call to verify your assistant's behavior before publishing.",
+      },
+      help: {
+        title: "Help & Documentation",
+        desc: "Access documentation, video tutorials and direct support. Our team is available to guide you.",
+      },
+      feedback: {
+        title: "Leave a testimonial",
+        desc: "Share your experience with AGT Platform. Your feedback helps other entrepreneurs discover the platform.",
+      },
+      bug: {
+        title: "Report an issue",
+        desc: "Found a bug? Describe it here and our technical team will be notified immediately.",
+      },
     },
   },
   feedback: {
     subtitle: "Share your experience with AGT Platform.",
     ratingLabel: "Your overall rating",
     commentLabel: "Your testimonial",
-    commentPlaceholder: "Describe your experience with AGT Platform. How has it helped your business?",
+    commentPlaceholder:
+      "Describe your experience with AGT Platform. How has it helped your business?",
     minChars: "Minimum 10 characters",
     submitBtn: "Send my testimonial",
     successTitle: "Testimonial sent!",
@@ -4358,17 +4818,20 @@ export const en = {
   },
 
   bug: {
-    subtitle: "Describe the issue encountered. Our technical team will be notified immediately.",
+    subtitle:
+      "Describe the issue encountered. Our technical team will be notified immediately.",
     categoryLabel: "Which part of the platform is affected?",
     severityLabel: "What is the impact on your business?",
     titleLabel: "Issue summary",
     titlePlaceholder: "Ex: The bot stopped responding this morning",
     descLabel: "Detailed description",
-    descPlaceholder: "Describe precisely what is happening, the steps to reproduce the issue...",
+    descPlaceholder:
+      "Describe precisely what is happening, the steps to reproduce the issue...",
     minChars: "Minimum 20 characters",
     submitBtn: "Send report",
     successTitle: "Report received!",
-    successBody: "Our technical team has been notified. We will get back to you as soon as possible.",
+    successBody:
+      "Our technical team has been notified. We will get back to you as soon as possible.",
     another: "Report another issue",
     successToast: "Report sent. Thank you, we will investigate!",
   },
@@ -4383,15 +4846,38 @@ export const en = {
 
 export const fr = {
   common: {
-    save: "Enregistrer", cancel: "Annuler", delete: "Supprimer", edit: "Modifier",
-    add: "Ajouter", close: "Fermer", loading: "Chargement…", error: "Une erreur est survenue",
-    confirmTitle: "Êtes-vous sûr ?", confirmDeleteBody: "Cette action est irréversible.",
-    noData: "Aucune donnée.", next: "Suivant", prev: "Précédent", search: "Rechercher…",
-    active: "Actif", inactive: "Inactif", status: "Statut", actions: "Actions",
-    yes: "Oui", no: "Non", all: "Tous", free: "Gratuit",
-    logout: "Déconnexion", settings: "Paramètres", profile: "Profil",
-    fr: "Français", en: "English", back: "Retour", continue: "Continuer",
-    confirm: "Confirmer", perMonth: "/ mois", unlimited: "Illimité",
+    save: "Enregistrer",
+    cancel: "Annuler",
+    delete: "Supprimer",
+    edit: "Modifier",
+    add: "Ajouter",
+    close: "Fermer",
+    loading: "Chargement…",
+    error: "Une erreur est survenue",
+    confirmTitle: "Êtes-vous sûr ?",
+    confirmDeleteBody: "Cette action est irréversible.",
+    noData: "Aucune donnée.",
+    next: "Suivant",
+    prev: "Précédent",
+    search: "Rechercher…",
+    active: "Actif",
+    inactive: "Inactif",
+    status: "Statut",
+    actions: "Actions",
+    yes: "Oui",
+    no: "Non",
+    all: "Tous",
+    free: "Gratuit",
+    logout: "Déconnexion",
+    settings: "Paramètres",
+    profile: "Profil",
+    fr: "Français",
+    en: "English",
+    back: "Retour",
+    continue: "Continuer",
+    confirm: "Confirmer",
+    perMonth: "/ mois",
+    unlimited: "Illimité",
     recommended: "Recommandé",
     espacePME: "Espace PME",
     lightMode: "Mode clair",
@@ -4401,9 +4887,15 @@ export const fr = {
   },
 
   nav: {
-    dashboard: "Tableau de bord", bots: "Mes Bots", services: "Services",
-    appointments: "Rendez-vous", billing: "Facturation", profile: "Mon Profil",
-    faq: "FAQ", providers: "Fournisseurs", subscriptions: "Abonnements",
+    dashboard: "Tableau de bord",
+    bots: "Mes Bots",
+    services: "Services",
+    appointments: "Rendez-vous",
+    billing: "Facturation",
+    profile: "Mon Profil",
+    faq: "FAQ",
+    providers: "Fournisseurs",
+    subscriptions: "Abonnements",
     restartOnboarding: "Relancer l'assistant",
     quickSetup: "Configuration rapide",
     help: "Demander de l'aide",
@@ -4415,9 +4907,12 @@ export const fr = {
 
   auth: {
     loginTitle: "Accédez à votre espace",
-    loginSubtitle: "Gérez vos assistants virtuels depuis votre tableau de bord.",
-    email: "Adresse email", password: "Mot de passe",
-    loginBtn: "Se connecter", loggingIn: "Connexion…",
+    loginSubtitle:
+      "Gérez vos assistants virtuels depuis votre tableau de bord.",
+    email: "Adresse email",
+    password: "Mot de passe",
+    loginBtn: "Se connecter",
+    loggingIn: "Connexion…",
     loginError: "Email ou mot de passe incorrect.",
     orContinueWith: "Ou continuer avec",
     googleBtn: "Continuer avec Google",
@@ -4428,10 +4923,13 @@ export const fr = {
     forgotPasswordTitle: "Réinitialiser le mot de passe",
     forgotPasswordSubtitle: "Entrez votre email, nous vous enverrons un lien.",
     forgotPasswordBtn: "Envoyer le lien",
-    forgotPasswordSent: "Si votre e-mail existe dans notre système, alors vous avez reçu un mail.",
+    forgotPasswordSent:
+      "Si votre e-mail existe dans notre système, alors vous avez reçu un mail.",
     backToLogin: "Retour à la connexion",
-    noAccount: "Pas encore de compte ?", signUp: "Créer un compte",
-    tabPassword: "Mot de passe", tabMagicLink: "Lien magique",
+    noAccount: "Pas encore de compte ?",
+    signUp: "Créer un compte",
+    tabPassword: "Mot de passe",
+    tabMagicLink: "Lien magique",
     pmeHint: "PME : pharmacie@example.com / n'importe quel mot de passe",
     adminHint: "Admin : admin@agt.com / n'importe quel mot de passe",
   },
@@ -4439,26 +4937,34 @@ export const fr = {
   landing: {
     heroTitle: "Votre assistant virtuel,",
     heroTitleAccent: "prêt en 5 minutes.",
-    heroSubtitle: "AGT Platform donne à chaque entreprise camerounaise un assistant WhatsApp et vocal intelligent, disponible 24h/24, pour répondre aux clients, gérer les rendez-vous et booster vos ventes.",
+    heroSubtitle:
+      "AGT Platform donne à chaque entreprise camerounaise un assistant WhatsApp et vocal intelligent, disponible 24h/24, pour répondre aux clients, gérer les rendez-vous et booster vos ventes.",
     feature1Title: "Assistant WhatsApp",
-    feature1Desc: "Répondez automatiquement à vos clients sur WhatsApp, 24h/24 et 7j/7. Rappels automatiques inclus.",
+    feature1Desc:
+      "Répondez automatiquement à vos clients sur WhatsApp, 24h/24 et 7j/7. Rappels automatiques inclus.",
     feature2Title: "Agent Vocal IA",
-    feature2Desc: "Gérez vos appels entrants avec une IA vocale naturelle, sans décrocher.",
+    feature2Desc:
+      "Gérez vos appels entrants avec une IA vocale naturelle, sans décrocher.",
     feature3Title: "Rendez-vous automatiques",
-    feature3Desc: "Vos clients réservent, modifient et reçoivent des rappels par WhatsApp ou e-mail — sans intervention manuelle.",
+    feature3Desc:
+      "Vos clients réservent, modifient et reçoivent des rappels par WhatsApp ou e-mail — sans intervention manuelle.",
     feature4Title: "Tableau de bord",
-    feature4Desc: "Suivez vos conversations, vos rendez-vous et vos performances en temps réel.",
+    feature4Desc:
+      "Suivez vos conversations, vos rendez-vous et vos performances en temps réel.",
     feature5Title: "Multi-canal",
-    feature5Desc: "WhatsApp, vocal et e-mail dans une seule plateforme, accessible depuis n'importe quel appareil.",
+    feature5Desc:
+      "WhatsApp, vocal et e-mail dans une seule plateforme, accessible depuis n'importe quel appareil.",
     feature6Title: "Paiement flexible",
-    feature6Desc: "Payez via Mobile Money (Orange Money, MTN MoMo) ou carte bancaire internationale. Sans compte bancaire requis.",
+    feature6Desc:
+      "Payez via Mobile Money (Orange Money, MTN MoMo) ou carte bancaire internationale. Sans compte bancaire requis.",
     heroCta: "Démarrer maintenant",
     heroCtaSub: "Premier mois offert avec votre bonus de bienvenue",
     plansTitle: "Des tarifs pensés pour le Cameroun",
     plansSubtitle: "Commencez avec le Starter, évoluez à votre rythme.",
     ctaTitle: "Prêt à transformer votre relation client ?",
     ctaBtn: "Créer mon compte",
-    loginCta: "Déjà un compte ?", loginLink: "Se connecter",
+    loginCta: "Déjà un compte ?",
+    loginLink: "Se connecter",
     welcomeBadge: "{amount} offerts à l'inscription",
     featuresTitle: "Des fonctionnalités pensées pour le Cameroun",
     footerRights: "AGT Technologies. Tous droits réservés.",
@@ -4469,16 +4975,20 @@ export const fr = {
 
     demoTag: "Voir la plateforme",
     demoTitle: "Découvrez AGT Platform en action",
-    demoSubtitle: "Voyez comment nos clients PME gèrent leurs assistants virtuels au quotidien.",
+    demoSubtitle:
+      "Voyez comment nos clients PME gèrent leurs assistants virtuels au quotidien.",
     demoPlay: "Lire la vidéo",
 
     testimonialsTag: "Ils nous font confiance",
     testimonialsTitle: "Ce que disent nos clients",
-    testimonialsSubtitle: "Des PME camerounaises qui ont transformé leur service client avec AGT Platform.",
+    testimonialsSubtitle:
+      "Des PME camerounaises qui ont transformé leur service client avec AGT Platform.",
 
-    ctaSubtitle: "Rejoignez plus de 500 entreprises camerounaises qui font confiance à AGT Platform.",
+    ctaSubtitle:
+      "Rejoignez plus de 500 entreprises camerounaises qui font confiance à AGT Platform.",
 
-    footerTagline: "L'assistant virtuel intelligent pour les entreprises africaines — WhatsApp & IA vocale.",
+    footerTagline:
+      "L'assistant virtuel intelligent pour les entreprises africaines — WhatsApp & IA vocale.",
     footerProduct: "Produit",
     footerResources: "Ressources",
     footerGroup: "Groupe AG Technologies",
@@ -4488,7 +4998,7 @@ export const fr = {
     footerSignup: "Créer un compte",
     footerHelp: "Centre d'aide",
     footerTutorial: "Tutoriel",
-    footerLogin: "Se connecter"
+    footerLogin: "Se connecter",
   },
 
   plans: {
@@ -4513,12 +5023,18 @@ export const fr = {
   onboarding: {
     accountTitle: "Créez votre compte",
     accountSubtitle: "Démarrez votre assistant virtuel en quelques minutes.",
-    stepLabels: ["Votre entreprise", "Votre abonnement", "Paiement", "Confirmation"],
+    stepLabels: [
+      "Votre entreprise",
+      "Votre abonnement",
+      "Paiement",
+      "Confirmation",
+    ],
     welcomeGiftTitle: "Cadeau de bienvenue",
     welcomeGiftDesc: "Votre portefeuille a été crédité de 10 000 XAF !",
     welcomeGiftSub: "Utilisez-le pour activer votre premier abonnement.",
     profileTitle: "Parlez-nous de votre entreprise",
-    profileSubtitle: "Ces informations aident votre assistant à mieux répondre à vos clients.",
+    profileSubtitle:
+      "Ces informations aident votre assistant à mieux répondre à vos clients.",
     emailCheckTitle: "Vérifiez votre email",
     emailCheckSubtitle: "Un lien de confirmation a été envoyé à",
     emailCheckWaiting: "Vérification en cours…",
@@ -4537,13 +5053,20 @@ export const fr = {
       fullName: "Votre nom complet",
     },
     sectors: {
-      sante: "Santé", juridique: "Juridique", beaute: "Beauté & Bien-être",
-      restauration: "Restauration", commerce: "Commerce & Distribution",
-      education: "Éducation & Formation", immobilier: "Immobilier",
-      transport: "Transport & Logistique", finance: "Finance & Assurance", autre: "Autre",
+      sante: "Santé",
+      juridique: "Juridique",
+      beaute: "Beauté & Bien-être",
+      restauration: "Restauration",
+      commerce: "Commerce & Distribution",
+      education: "Éducation & Formation",
+      immobilier: "Immobilier",
+      transport: "Transport & Logistique",
+      finance: "Finance & Assurance",
+      autre: "Autre",
     },
     planTitle: "Choisissez votre abonnement",
-    planSubtitle: "Vous pouvez changer de plan à tout moment depuis votre espace.",
+    planSubtitle:
+      "Vous pouvez changer de plan à tout moment depuis votre espace.",
     paymentTitle: "Finaliser votre abonnement",
     paymentSubtitle: "Votre solde actuel :",
     paymentWalletBtn: "Payer avec mon portefeuille",
@@ -4551,7 +5074,8 @@ export const fr = {
     paymentInsufficient: "Solde insuffisant pour ce plan.",
     paymentSuccess: "Paiement effectué !",
     successTitle: "Votre assistant est prêt !",
-    successSubtitle: "Votre Pack de Bots a été activé. Bienvenue sur AGT Platform.",
+    successSubtitle:
+      "Votre Pack de Bots a été activé. Bienvenue sur AGT Platform.",
     successBtn: "Accéder à mon tableau de bord",
     selectedPlan: "Plan sélectionné",
     walletBalance: "Solde portefeuille",
@@ -4561,7 +5085,8 @@ export const fr = {
 
   pending: {
     title: "Vérifiez votre email",
-    subtitle: "Un lien de confirmation a été envoyé à votre adresse email. Cliquez dessus pour continuer.",
+    subtitle:
+      "Un lien de confirmation a été envoyé à votre adresse email. Cliquez dessus pour continuer.",
     resendBtn: "Renvoyer l'email de vérification",
     backToLogin: "Retour à la connexion",
     resendSuccess: "Email renvoyé ! Vérifiez votre boîte mail.",
@@ -4573,9 +5098,11 @@ export const fr = {
     loading: "Vérification en cours…",
     loadingSubtitle: "Veuillez patienter quelques instants.",
     successTitle: "Email vérifié ✓",
-    successSubtitle: "Votre adresse email a été confirmée. Vous allez être redirigé…",
+    successSubtitle:
+      "Votre adresse email a été confirmée. Vous allez être redirigé…",
     errorTitle: "Lien invalide",
-    errorSubtitle: "Si le lien a expiré, reconnectez-vous pour en recevoir un nouveau.",
+    errorSubtitle:
+      "Si le lien a expiré, reconnectez-vous pour en recevoir un nouveau.",
     backToLogin: "Retour à la connexion",
   },
   resetPassword: {
@@ -4590,8 +5117,10 @@ export const fr = {
     successTitle: "Mot de passe mis à jour ✓",
     successSubtitle: "Redirection vers votre tableau de bord…",
     errorTitle: "Lien invalide",
-    errorMissingToken: "Aucun jeton de réinitialisation fourni. Demandez un nouveau lien.",
-    errorGeneric: "Impossible de réinitialiser votre mot de passe. Le lien a peut-être expiré.",
+    errorMissingToken:
+      "Aucun jeton de réinitialisation fourni. Demandez un nouveau lien.",
+    errorGeneric:
+      "Impossible de réinitialiser votre mot de passe. Le lien a peut-être expiré.",
     backToLogin: "Retour à la connexion",
   },
 
@@ -4601,7 +5130,8 @@ export const fr = {
     successTitle: "Bienvenue ✓",
     successSubtitle: "Vous êtes connecté. Redirection…",
     errorTitle: "Lien invalide",
-    errorSubtitle: "Les liens magiques expirent après 15 minutes. Demandez-en un nouveau depuis la page de connexion.",
+    errorSubtitle:
+      "Les liens magiques expirent après 15 minutes. Demandez-en un nouveau depuis la page de connexion.",
     errorMissingToken: "Aucun jeton magique fourni.",
     errorGeneric: "Ce lien magique n'est plus valide.",
     backToLogin: "Retour à la connexion",
@@ -4609,7 +5139,8 @@ export const fr = {
 
   errors: {
     notFoundTitle: "Page introuvable",
-    notFoundSubtitle: "La page que vous cherchez n'existe pas ou a été déplacée.",
+    notFoundSubtitle:
+      "La page que vous cherchez n'existe pas ou a été déplacée.",
     notFoundBtn: "Retour à l'accueil",
     errorTitle: "Une erreur est survenue",
     errorSubtitle: "Quelque chose s'est mal passé. Veuillez réessayer.",
@@ -4618,13 +5149,18 @@ export const fr = {
 
   dashboard: {
     pme: {
-      title: "Tableau de bord", welcome: "Bonjour",
+      title: "Tableau de bord",
+      welcome: "Bonjour",
       subtitle: "Voici l'activité de votre assistant virtuel.",
-      messagesToday: "Messages aujourd'hui", callsToday: "Appels aujourd'hui",
-      appointmentsToday: "RDV aujourd'hui", activeConversations: "Conversations actives",
-      thisWeek: "Cette semaine", recentConversations: "Dernières conversations",
+      messagesToday: "Messages aujourd'hui",
+      callsToday: "Appels aujourd'hui",
+      appointmentsToday: "RDV aujourd'hui",
+      activeConversations: "Conversations actives",
+      thisWeek: "Cette semaine",
+      recentConversations: "Dernières conversations",
       noConversations: "Aucune conversation récente.",
-      channel_whatsapp: "WhatsApp", channel_voice: "Vocal",
+      channel_whatsapp: "WhatsApp",
+      channel_voice: "Vocal",
       quickLinks: "Accès rapides",
       subscription: "Mon abonnement",
       usageMessages: "Messages utilisés",
@@ -4648,18 +5184,30 @@ export const fr = {
     settingsTab: "Paramètres",
     settingsSave: "Enregistrer",
     settingsSaved: "Paramètres sauvegardés !",
-    title: "Mes Bots", subtitle: "Gérez vos assistants virtuels.",
+    title: "Mes Bots",
+    subtitle: "Gérez vos assistants virtuels.",
     newBtn: "Nouveau bot",
     errorLoad: "Erreur lors du chargement des bots.",
     createSuccess: "Bot créé avec succès !",
-    deleteSuccess: "Bot supprimé.", deleteError: "Erreur lors de la suppression.",
+    deleteSuccess: "Bot supprimé.",
+    deleteError: "Erreur lors de la suppression.",
     confirmDelete: "Supprimer ce bot définitivement ?",
     noData: "Aucun bot configuré.",
-    statusActive: "Actif", statusPaused: "En pause", statusArchived: "Archivé",
-    providerWaha: "WAHA", providerMeta: "Meta API",
-    providerGemini: "Gemini", providerOpenAI: "OpenAI",
+    statusActive: "Actif",
+    statusPaused: "En pause",
+    statusArchived: "Archivé",
+    providerWaha: "WAHA",
+    providerMeta: "Meta API",
+    providerGemini: "Gemini",
+    providerOpenAI: "OpenAI",
     filters: { searchPlaceholder: "Rechercher un bot…", allStatuses: "Tous" },
-    table: { name: "Nom", whatsapp: "WhatsApp", voice: "IA Vocale", status: "Statut", date: "Créé le" },
+    table: {
+      name: "Nom",
+      whatsapp: "WhatsApp",
+      voice: "IA Vocale",
+      status: "Statut",
+      date: "Créé le",
+    },
     // ── Publish ──────────────────────────────────────────────────────────────────
     publish: "Publier le bot",
     unpublish: "Dépublier",
@@ -4719,12 +5267,18 @@ export const fr = {
     testUnpublishedBadge: "Hors ligne",
     // ── Modal ─────────────────────────────────────────────────────────────────────
     modal: {
-      createTitle: "Nouveau Bot", editTitle: "Modifier le Bot",
-      btnCreate: "Créer le bot", btnUpdate: "Mettre à jour",
+      createTitle: "Nouveau Bot",
+      editTitle: "Modifier le Bot",
+      btnCreate: "Créer le bot",
+      btnUpdate: "Mettre à jour",
       fields: {
-        name: "Nom du bot", welcome: "Message d'accueil", personality: "Personnalité",
-        languages: "Langues", whatsappProvider: "Fournisseur WhatsApp",
-        voiceProvider: "Fournisseur IA Vocale", isActive: "Activer immédiatement",
+        name: "Nom du bot",
+        welcome: "Message d'accueil",
+        personality: "Personnalité",
+        languages: "Langues",
+        whatsappProvider: "Fournisseur WhatsApp",
+        voiceProvider: "Fournisseur IA Vocale",
+        isActive: "Activer immédiatement",
       },
     },
     // ── Sessions de test & config ──────────────────────────────────────────────
@@ -4747,71 +5301,196 @@ export const fr = {
     testEmailsSent: "Email(s) envoyé(s)",
     testHandoffAlert: "Transfert humain déclenché",
     testResetSession: "Réinitialiser la session",
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DIFF À APPLIQUER MANUELLEMENT
+    // Fichier cible : src/dictionaries/fr.ts
+    // Action        : AJOUTER le bloc `whatsapp:` à l'intérieur de l'objet `bots: { ... }`
+    //                 (par ex. juste après la dernière clé existante de `bots`,
+    //                  AVANT la fermeture de `bots`).
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ─────── À COLLER À L'INTÉRIEUR DE bots: { ... } ───────────────────────────
+
+    whatsapp: {
+      // Panel
+      panelTitle: "Connexion WhatsApp",
+      panelSubtitle: "Liez ce bot à votre compte WhatsApp",
+
+      // Statuts
+      statusStopped: "Déconnecté",
+      statusStarting: "Démarrage…",
+      statusScanQR: "Scan en attente",
+      statusWorking: "Connecté",
+      statusFailed: "Échec",
+
+      // Description initiale
+      descriptionStopped:
+        "Liez votre numéro WhatsApp à ce bot pour qu'il reçoive et réponde automatiquement aux messages entrants.",
+
+      // Boutons
+      connectButton: "Connecter WhatsApp",
+      disconnectButton: "Déconnecter",
+      retryButton: "Réessayer",
+
+      // Confirmation déconnexion
+      disconnectConfirmTitle: "Déconnecter WhatsApp ?",
+      disconnectConfirmBody:
+        "Le bot ne pourra plus recevoir de messages WhatsApp tant qu'il n'est pas reconnecté.",
+      disconnectConfirmButton: "Oui, déconnecter",
+      disconnectSuccess: "Bot WhatsApp déconnecté.",
+
+      // Bot non publié
+      notPublishedTitle: "Bot non publié",
+      notPublishedMessage:
+        "Vous devez d'abord publier ce bot avant de pouvoir le lier à un compte WhatsApp.",
+      errorBotNotPublished:
+        "Ce bot doit être publié avant de pouvoir le connecter à WhatsApp.",
+
+      // Démarrage
+      startingMessage: "Démarrage de la connexion… veuillez patienter.",
+      qrGenerating: "Génération du QR code…",
+
+      // QR code
+      qrAlt: "QR code WhatsApp à scanner",
+      qrInstructionsTitle: "Comment scanner le QR code",
+      qrStep1: "Ouvrez WhatsApp sur votre téléphone",
+      qrStep2: "Allez dans Paramètres → Appareils liés",
+      qrStep3: "Touchez « Lier un appareil » et scannez ce QR code",
+      qrExpireHint:
+        "Le QR code expire après ~20 secondes. Il se rafraîchit automatiquement.",
+
+      // Connexion réussie
+      phoneLabel: "Numéro connecté",
+      connectedAtLabel: "Connecté le",
+      workingNote:
+        "Ce bot reçoit désormais automatiquement les messages WhatsApp et y répond grâce à son IA. Tous les échanges sont enregistrés dans l'onglet Conversations.",
+
+      // Info / Aide
+      infoLabel: "Info :",
+      singleSessionInfo:
+        "Un seul bot WhatsApp peut être connecté à la fois sur la plateforme.",
+    },
   },
 
   services: {
-    title: "Services", subtitle: "Les services proposés par votre assistant.",
+    title: "Services",
+    subtitle: "Les services proposés par votre assistant.",
     newBtn: "Nouveau service",
-    errorLoad: "Erreur lors du chargement.", createSuccess: "Service créé !",
-    deleteSuccess: "Service supprimé.", deleteError: "Erreur suppression.",
+    errorLoad: "Erreur lors du chargement.",
+    createSuccess: "Service créé !",
+    deleteSuccess: "Service supprimé.",
+    deleteError: "Erreur suppression.",
     confirmDelete: "Supprimer ce service ?",
-    noData: "Aucun service configuré.", free: "Gratuit",
-    table: { name: "Nom", description: "Description", price: "Tarif", duration: "Durée", status: "Statut" },
+    noData: "Aucun service configuré.",
+    free: "Gratuit",
+    table: {
+      name: "Nom",
+      description: "Description",
+      price: "Tarif",
+      duration: "Durée",
+      status: "Statut",
+    },
     modal: {
-      createTitle: "Nouveau Service", editTitle: "Modifier le Service",
-      btnCreate: "Créer", btnUpdate: "Mettre à jour",
-      fields: { name: "Nom", description: "Description", price: "Prix (XAF)", duration: "Durée (min)", isActive: "Actif" },
+      createTitle: "Nouveau Service",
+      editTitle: "Modifier le Service",
+      btnCreate: "Créer",
+      btnUpdate: "Mettre à jour",
+      fields: {
+        name: "Nom",
+        description: "Description",
+        price: "Prix (XAF)",
+        duration: "Durée (min)",
+        isActive: "Actif",
+      },
     },
   },
 
   appointments: {
-    title: "Rendez-vous", subtitle: "Tous les rendez-vous pris via votre assistant.",
+    title: "Rendez-vous",
+    subtitle: "Tous les rendez-vous pris via votre assistant.",
     newBtn: "Nouveau RDV",
-    errorLoad: "Erreur lors du chargement.", createSuccess: "RDV créé !",
-    deleteSuccess: "RDV supprimé.", deleteError: "Erreur suppression.",
+    errorLoad: "Erreur lors du chargement.",
+    createSuccess: "RDV créé !",
+    deleteSuccess: "RDV supprimé.",
+    deleteError: "Erreur suppression.",
     confirmDelete: "Supprimer ce rendez-vous ?",
     noData: "Aucun rendez-vous pour cette période.",
-    statuses: { pending: "En attente", confirmed: "Confirmé", done: "Terminé", cancelled: "Annulé" },
+    statuses: {
+      pending: "En attente",
+      confirmed: "Confirmé",
+      done: "Terminé",
+      cancelled: "Annulé",
+    },
     channels: { whatsapp: "WhatsApp", voice: "Vocal", manual: "Manuel" },
-    table: { client: "Client", service: "Service", date: "Date & Heure", channel: "Canal", status: "Statut" },
+    table: {
+      client: "Client",
+      service: "Service",
+      date: "Date & Heure",
+      channel: "Canal",
+      status: "Statut",
+    },
     // ── Agenda ────────────────────────────────────────────────────────────────
-    viewWeek: "Semaine", viewDay: "Jour",
+    viewWeek: "Semaine",
+    viewDay: "Jour",
     today: "Aujourd'hui",
-    prevWeek: "Semaine précédente", nextWeek: "Semaine suivante",
-    prevDay: "Jour précédent", nextDay: "Jour suivant",
+    prevWeek: "Semaine précédente",
+    nextWeek: "Semaine suivante",
+    prevDay: "Jour précédent",
+    nextDay: "Jour suivant",
     noSlots: "Aucun RDV ce jour.",
     slotFree: "Créneau libre",
     // ── Config créneaux ───────────────────────────────────────────────────────
     configTitle: "Configuration des créneaux",
-    configSubtitle: "Le bot utilise ces paramètres pour proposer des horaires disponibles.",
-    durationLabel: "Durée d'un RDV", durationUnit: "min",
-    bufferLabel: "Tampon entre 2 RDV", bufferUnit: "min",
+    configSubtitle:
+      "Le bot utilise ces paramètres pour proposer des horaires disponibles.",
+    durationLabel: "Durée d'un RDV",
+    durationUnit: "min",
+    bufferLabel: "Tampon entre 2 RDV",
+    bufferUnit: "min",
     configSaved: "Configuration enregistrée.",
     // ── Détail RDV ────────────────────────────────────────────────────────────
     detailTitle: "Détail du rendez-vous",
-    detailClient: "Client", detailPhone: "Téléphone",
-    detailService: "Service", detailDate: "Date & heure",
-    detailChannel: "Canal", detailNotes: "Notes",
+    detailClient: "Client",
+    detailPhone: "Téléphone",
+    detailService: "Service",
+    detailDate: "Date & heure",
+    detailChannel: "Canal",
+    detailNotes: "Notes",
     detailStatus: "Statut",
     // ── Modale ────────────────────────────────────────────────────────────────
     modal: {
-      createTitle: "Nouveau RDV", editTitle: "Modifier le RDV",
-      btnCreate: "Créer", btnUpdate: "Mettre à jour",
+      createTitle: "Nouveau RDV",
+      editTitle: "Modifier le RDV",
+      btnCreate: "Créer",
+      btnUpdate: "Mettre à jour",
       fields: {
-        service: "Service", clientName: "Nom du client", clientPhone: "Téléphone",
-        clientEmail: "Email (optionnel)", scheduledAt: "Date et heure",
-        status: "Statut", notes: "Notes",
+        service: "Service",
+        clientName: "Nom du client",
+        clientPhone: "Téléphone",
+        clientEmail: "Email (optionnel)",
+        scheduledAt: "Date et heure",
+        status: "Statut",
+        notes: "Notes",
       },
     },
   },
   billing: {
-    title: "Facturation", subtitle: "Votre abonnement et votre portefeuille.",
-    currentPlan: "Plan actuel", renewsOn: "Renouvellement le",
-    messagesUsage: "Messages utilisés", callsUsage: "Appels utilisés",
-    walletBalance: "Solde portefeuille", topUp: "Recharger",
-    statusActive: "Actif", statusSuspended: "Suspendu", statusCancelled: "Résilié",
-    changePlan: "Changer de plan", availablePlans: "Plans disponibles",
-    monthly: "/ mois", features: "Fonctionnalités incluses",
+    title: "Facturation",
+    subtitle: "Votre abonnement et votre portefeuille.",
+    currentPlan: "Plan actuel",
+    renewsOn: "Renouvellement le",
+    messagesUsage: "Messages utilisés",
+    callsUsage: "Appels utilisés",
+    walletBalance: "Solde portefeuille",
+    topUp: "Recharger",
+    statusActive: "Actif",
+    statusSuspended: "Suspendu",
+    statusCancelled: "Résilié",
+    changePlan: "Changer de plan",
+    availablePlans: "Plans disponibles",
+    monthly: "/ mois",
+    features: "Fonctionnalités incluses",
     currentPlanBadge: "Plan actuel",
     // ── Recharge ────────────────────────────────────────────────────────────────
     topUpTitle: "Recharger le portefeuille",
@@ -4833,15 +5512,18 @@ export const fr = {
     changePlanCost: "Coût",
     changePlanBalance: "Solde actuel",
     changePlanAfter: "Solde après",
-    changePlanInsufficient: "Solde insuffisant. Veuillez recharger votre portefeuille.",
+    changePlanInsufficient:
+      "Solde insuffisant. Veuillez recharger votre portefeuille.",
     changePlanConfirm: "Confirmer le changement",
     changePlanSuccess: "Plan mis à jour avec succès !",
     changePlanError: "Erreur lors du changement de plan.",
     // ── Historique ───────────────────────────────────────────────────────────────
     historyTitle: "Historique des transactions",
     historyEmpty: "Aucune transaction.",
-    historyCredit: "Crédit", historyDebit: "Débit",
-    historyOperatorOrange: "Orange Money", historyOperatorMtn: "MTN MoMo",
+    historyCredit: "Crédit",
+    historyDebit: "Débit",
+    historyOperatorOrange: "Orange Money",
+    historyOperatorMtn: "MTN MoMo",
     historyOperatorSystem: "Système",
     historyReference: "Réf.",
     // ── Code de recharge ────────────────────────────────────────────────────
@@ -4850,72 +5532,127 @@ export const fr = {
     tabCode: "Code de recharge",
     tabMobile: "Mobile Money",
     codeHowToTitle: "Comment obtenir un code ?",
-    codeHowToDesc: "Contactez l'équipe AGT Technologies, effectuez votre paiement en cash ou via Orange Money / MTN MoMo, et recevez votre code unique par SMS ou WhatsApp.",
+    codeHowToDesc:
+      "Contactez l'équipe AGT Technologies, effectuez votre paiement en cash ou via Orange Money / MTN MoMo, et recevez votre code unique par SMS ou WhatsApp.",
     codeContactBtn: "Contacter AGT sur WhatsApp",
     codeLabel: "Votre code de recharge",
     codePlaceholder: "AGT-XXXX-XXXX",
     codeHint: "Le code est insensible à la casse",
-    codeSecurityMsg: "Chaque code est à usage unique et tracé. Toute tentative d'utilisation frauduleuse est enregistrée.",
+    codeSecurityMsg:
+      "Chaque code est à usage unique et tracé. Toute tentative d'utilisation frauduleuse est enregistrée.",
     codeApplyBtn: "Appliquer le code",
     codeVerifying: "Vérification…",
     codeSuccessNewBalance: "Nouveau solde",
     mobileSoonTitle: "Bientôt disponible",
-    mobileSoonDesc: "Le paiement direct via Orange Money et MTN MoMo sera disponible très prochainement.",
+    mobileSoonDesc:
+      "Le paiement direct via Orange Money et MTN MoMo sera disponible très prochainement.",
     mobileSoonRedirect: "En attendant, utilisez l'onglet",
     mobileSoonRedirectLink: "Code de recharge",
   },
 
   faq: {
-    title: "FAQ", subtitle: "Les questions fréquentes de vos clients.",
+    title: "FAQ",
+    subtitle: "Les questions fréquentes de vos clients.",
     newBtn: "Nouvelle question",
-    errorLoad: "Erreur lors du chargement.", createSuccess: "Question créée !",
-    deleteSuccess: "Question supprimée.", deleteError: "Erreur suppression.",
+    errorLoad: "Erreur lors du chargement.",
+    createSuccess: "Question créée !",
+    deleteSuccess: "Question supprimée.",
+    deleteError: "Erreur suppression.",
     confirmDelete: "Supprimer cette question ?",
     noData: "Aucune question configurée.",
     modal: {
-      createTitle: "Nouvelle question", editTitle: "Modifier la question",
-      btnCreate: "Créer", btnUpdate: "Mettre à jour",
+      createTitle: "Nouvelle question",
+      editTitle: "Modifier la question",
+      btnCreate: "Créer",
+      btnUpdate: "Mettre à jour",
       fields: {
-        questionFr: "Question (FR)", questionEn: "Question (EN)",
-        answerFr: "Réponse (FR)", answerEn: "Réponse (EN)",
-        category: "Catégorie", isActive: "Active",
+        questionFr: "Question (FR)",
+        questionEn: "Question (EN)",
+        answerFr: "Réponse (FR)",
+        answerEn: "Réponse (EN)",
+        category: "Catégorie",
+        isActive: "Active",
       },
     },
   },
 
   tenants: {
-    title: "Entreprises", subtitle: "Toutes les entreprises abonnées à la plateforme.",
+    title: "Entreprises",
+    subtitle: "Toutes les entreprises abonnées à la plateforme.",
     newBtn: "Nouvelle entreprise",
-    errorLoad: "Erreur lors du chargement.", createSuccess: "Entreprise créée !",
-    deleteSuccess: "Entreprise supprimée.", deleteError: "Erreur suppression.",
-    confirmDelete: "Supprimer cette entreprise ? Toutes ses données seront perdues.",
+    errorLoad: "Erreur lors du chargement.",
+    createSuccess: "Entreprise créée !",
+    deleteSuccess: "Entreprise supprimée.",
+    deleteError: "Erreur suppression.",
+    confirmDelete:
+      "Supprimer cette entreprise ? Toutes ses données seront perdues.",
     noData: "Aucune entreprise.",
-    table: { name: "Nom", sector: "Secteur", subscription: "Abonnement", status: "Statut", date: "Créé le" },
+    table: {
+      name: "Nom",
+      sector: "Secteur",
+      subscription: "Abonnement",
+      status: "Statut",
+      date: "Créé le",
+    },
     modal: {
-      createTitle: "Nouvelle Entreprise", editTitle: "Modifier l'Entreprise",
-      btnCreate: "Créer", btnUpdate: "Mettre à jour",
-      fields: { name: "Nom", slug: "Slug", sector: "Secteur", description: "Description", whatsapp: "Numéro WhatsApp", phone: "Téléphone", isActive: "Active" },
+      createTitle: "Nouvelle Entreprise",
+      editTitle: "Modifier l'Entreprise",
+      btnCreate: "Créer",
+      btnUpdate: "Mettre à jour",
+      fields: {
+        name: "Nom",
+        slug: "Slug",
+        sector: "Secteur",
+        description: "Description",
+        whatsapp: "Numéro WhatsApp",
+        phone: "Téléphone",
+        isActive: "Active",
+      },
     },
   },
 
   providers: {
-    title: "Fournisseurs", subtitle: "Configuration des fournisseurs de services externes.",
-    errorLoad: "Erreur chargement.", updateSuccess: "Fournisseur mis à jour.",
-    types: { whatsapp: "WhatsApp", voice_ai: "IA Vocale", phone_operator: "Opérateur Téléphonique" },
+    title: "Fournisseurs",
+    subtitle: "Configuration des fournisseurs de services externes.",
+    errorLoad: "Erreur chargement.",
+    updateSuccess: "Fournisseur mis à jour.",
+    types: {
+      whatsapp: "WhatsApp",
+      voice_ai: "IA Vocale",
+      phone_operator: "Opérateur Téléphonique",
+    },
     table: { provider: "Fournisseur", type: "Type", status: "Statut" },
   },
 
   subscriptions: {
-    title: "Abonnements", subtitle: "Tous les abonnements des entreprises.",
-    errorLoad: "Erreur chargement.", noData: "Aucun abonnement.",
-    statuses: { active: "Actif", suspended: "Suspendu", cancelled: "Résilié", trial: "Essai" },
-    table: { tenant: "Entreprise", plan: "Plan", status: "Statut", usage: "Usage", renewal: "Renouvellement" },
+    title: "Abonnements",
+    subtitle: "Tous les abonnements des entreprises.",
+    errorLoad: "Erreur chargement.",
+    noData: "Aucun abonnement.",
+    statuses: {
+      active: "Actif",
+      suspended: "Suspendu",
+      cancelled: "Résilié",
+      trial: "Essai",
+    },
+    table: {
+      tenant: "Entreprise",
+      plan: "Plan",
+      status: "Statut",
+      usage: "Usage",
+      renewal: "Renouvellement",
+    },
   },
 
   profile: {
-    title: "Mon Profil", subtitle: "Informations de votre compte.",
-    name: "Nom complet", email: "Email", role: "Rôle", tenant: "Entreprise",
-    saveSuccess: "Profil mis à jour.", saveError: "Erreur lors de la sauvegarde.",
+    title: "Mon Profil",
+    subtitle: "Informations de votre compte.",
+    name: "Nom complet",
+    email: "Email",
+    role: "Rôle",
+    tenant: "Entreprise",
+    saveSuccess: "Profil mis à jour.",
+    saveError: "Erreur lors de la sauvegarde.",
     editProfile: "MODIFIER LE PROFIL",
     changePassword: "CHANGER LE MOT DE PASSE",
     companySection: "MON ENTREPRISE",
@@ -4937,32 +5674,54 @@ export const fr = {
   support: {
     chatTitle: "Aide & Support",
     chatPlaceholder: "Comment puis-je vous aider ?",
-    chatWelcome: "Bonjour ! Je suis l'assistant AGT. Comment puis-je vous aider aujourd'hui ?",
+    chatWelcome:
+      "Bonjour ! Je suis l'assistant AGT. Comment puis-je vous aider aujourd'hui ?",
     agtBotTitle: "Découvrir AGT sur WhatsApp",
     agtBotSubtitle: "Chattez avec nous sur WhatsApp",
   },
   knowledge: {
-    title: "Base de connaissance", subtitle: "Tout ce que votre assistant doit savoir sur votre entreprise.",
-    tabGeneral: "Infos générales", tabLocations: "Agences", tabFaq: "FAQ", tabServices: "Services & Tarifs",
+    title: "Base de connaissance",
+    subtitle: "Tout ce que votre assistant doit savoir sur votre entreprise.",
+    tabGeneral: "Infos générales",
+    tabLocations: "Agences",
+    tabFaq: "FAQ",
+    tabServices: "Services & Tarifs",
     botSection: "Assistant virtuel & Branding",
-    welcomeMessage: "Message d'accueil", botTone: "Ton de communication",
-    toneFormal: "Formel", toneSemiFormal: "Semi-formel", toneCasual: "Décontracté", toneInherit: "Hériter du général",
-    botPersonality: "Personnalité du bot", botLanguages: "Langues du bot", botSignature: "Signature automatique",
+    welcomeMessage: "Message d'accueil",
+    botTone: "Ton de communication",
+    toneFormal: "Formel",
+    toneSemiFormal: "Semi-formel",
+    toneCasual: "Décontracté",
+    toneInherit: "Hériter du général",
+    botPersonality: "Personnalité du bot",
+    botLanguages: "Langues du bot",
+    botSignature: "Signature automatique",
     slogan: "Slogan de l'entreprise",
     contactSection: "Contacts principaux",
-    contactWhatsapp: "WhatsApp", contactPhone: "Téléphone", contactEmail: "Email", website: "Site web",
+    contactWhatsapp: "WhatsApp",
+    contactPhone: "Téléphone",
+    contactEmail: "Email",
+    website: "Site web",
     transferSection: "Transfert vers un humain",
-    transferSubtitle: "Quand le bot ne peut pas répondre, il transfère vers ces contacts.",
-    transferWhatsapp: "WhatsApp de transfert", transferPhone: "Téléphone de transfert",
-    transferEmail: "Email de transfert", transferMessage: "Message de transfert",
+    transferSubtitle:
+      "Quand le bot ne peut pas répondre, il transfère vers ces contacts.",
+    transferWhatsapp: "WhatsApp de transfert",
+    transferPhone: "Téléphone de transfert",
+    transferEmail: "Email de transfert",
+    transferMessage: "Message de transfert",
     extraInfo: "Informations supplémentaires",
-    hoursOpening: "Horaires d'ouverture", hoursAppointments: "Horaires de réception RDV",
+    hoursOpening: "Horaires d'ouverture",
+    hoursAppointments: "Horaires de réception RDV",
     saveSuccess: "Enregistré avec succès.",
-    addLocation: "Ajouter une agence", editLocation: "Modifier l'agence",
-    locationName: "Nom de l'agence", locationAddress: "Adresse",
-    locationDeleted: "Agence supprimée.", locationDeleteConfirm: "Supprimer cette agence ?",
+    addLocation: "Ajouter une agence",
+    editLocation: "Modifier l'agence",
+    locationName: "Nom de l'agence",
+    locationAddress: "Adresse",
+    locationDeleted: "Agence supprimée.",
+    locationDeleteConfirm: "Supprimer cette agence ?",
     noLocations: "Aucune agence configurée.",
-    faqCount: "questions configurées", manageFaq: "Gérer la FAQ",
+    faqCount: "questions configurées",
+    manageFaq: "Gérer la FAQ",
     manageServices: "Gérer les services",
     serviceWelcomeMessage: "Message d'accueil spécifique",
     serviceBotDescription: "Description pour le bot",
@@ -4998,10 +5757,13 @@ export const fr = {
   },
   tutorial: {
     title: "Tutoriel interface",
-    subtitle: "Découvrez toutes les fonctionnalités de votre espace AGT, section par section.",
+    subtitle:
+      "Découvrez toutes les fonctionnalités de votre espace AGT, section par section.",
     startBtn: "Commencer le tutoriel",
-    nextBtn: "Suivant", prevBtn: "Précédent",
-    finishBtn: "Terminer", skipBtn: "Passer",
+    nextBtn: "Suivant",
+    prevBtn: "Précédent",
+    finishBtn: "Terminer",
+    skipBtn: "Passer",
     stepOf: "sur",
     sections: "sections",
     goToSection: "Accéder à cette section",
@@ -5012,24 +5774,58 @@ export const fr = {
       support: "Support",
     },
     steps: {
-      dashboard: { title: "Votre tableau de bord", desc: "Visualisez en temps réel vos messages, appels, rendez-vous et conversations actives. C'est votre centre de contrôle." },
-      bots: { title: "Vos Bots", desc: "Créez et configurez vos assistants WhatsApp et vocaux. Testez-les avant de les publier pour vos clients." },
-      knowledge: { title: "Base de connaissance", desc: "Renseignez les informations de votre entreprise : horaires, services, agences, FAQ. Votre bot s'en sert pour répondre précisément." },
-      appointments: { title: "Agenda & Rendez-vous", desc: "Suivez tous les rendez-vous pris automatiquement par votre bot. Configurez les créneaux disponibles selon vos horaires." },
-      services: { title: "Vos Services", desc: "Créez vos prestations avec nom, tarif et durée. Votre bot les utilise pour informer vos clients et prendre des rendez-vous." },
-      billing: { title: "Facturation & Wallet", desc: "Rechargez votre portefeuille via Orange Money ou MTN MoMo, et gérez votre abonnement en toute simplicité." },
-      profile: { title: "Mon Profil", desc: "Personnalisez vos informations de compte et les préférences de votre espace PME." },
-      test: { title: "Tester votre bot", desc: "Simulez une vraie conversation WhatsApp ou un appel vocal pour vérifier le comportement de votre assistant avant publication." },
-      help: { title: "Aide & Documentation", desc: "Accédez à la documentation, aux tutoriels vidéo et au support direct. Notre équipe est disponible pour vous accompagner." },
-      feedback: { title: "Laisser un témoignage", desc: "Partagez votre expérience avec AGT Platform. Votre avis aide d'autres entrepreneurs à découvrir la plateforme." },
-      bug: { title: "Signaler un problème", desc: "Un bug ou une anomalie ? Décrivez-le ici. Notre équipe technique est notifiée immédiatement." },
+      dashboard: {
+        title: "Votre tableau de bord",
+        desc: "Visualisez en temps réel vos messages, appels, rendez-vous et conversations actives. C'est votre centre de contrôle.",
+      },
+      bots: {
+        title: "Vos Bots",
+        desc: "Créez et configurez vos assistants WhatsApp et vocaux. Testez-les avant de les publier pour vos clients.",
+      },
+      knowledge: {
+        title: "Base de connaissance",
+        desc: "Renseignez les informations de votre entreprise : horaires, services, agences, FAQ. Votre bot s'en sert pour répondre précisément.",
+      },
+      appointments: {
+        title: "Agenda & Rendez-vous",
+        desc: "Suivez tous les rendez-vous pris automatiquement par votre bot. Configurez les créneaux disponibles selon vos horaires.",
+      },
+      services: {
+        title: "Vos Services",
+        desc: "Créez vos prestations avec nom, tarif et durée. Votre bot les utilise pour informer vos clients et prendre des rendez-vous.",
+      },
+      billing: {
+        title: "Facturation & Wallet",
+        desc: "Rechargez votre portefeuille via Orange Money ou MTN MoMo, et gérez votre abonnement en toute simplicité.",
+      },
+      profile: {
+        title: "Mon Profil",
+        desc: "Personnalisez vos informations de compte et les préférences de votre espace PME.",
+      },
+      test: {
+        title: "Tester votre bot",
+        desc: "Simulez une vraie conversation WhatsApp ou un appel vocal pour vérifier le comportement de votre assistant avant publication.",
+      },
+      help: {
+        title: "Aide & Documentation",
+        desc: "Accédez à la documentation, aux tutoriels vidéo et au support direct. Notre équipe est disponible pour vous accompagner.",
+      },
+      feedback: {
+        title: "Laisser un témoignage",
+        desc: "Partagez votre expérience avec AGT Platform. Votre avis aide d'autres entrepreneurs à découvrir la plateforme.",
+      },
+      bug: {
+        title: "Signaler un problème",
+        desc: "Un bug ou une anomalie ? Décrivez-le ici. Notre équipe technique est notifiée immédiatement.",
+      },
     },
   },
   feedback: {
     subtitle: "Partagez votre expérience avec AGT Platform.",
     ratingLabel: "Votre note globale",
     commentLabel: "Votre témoignage",
-    commentPlaceholder: "Décrivez votre expérience avec AGT Platform. Comment la plateforme vous a-t-elle aidé dans votre activité ?",
+    commentPlaceholder:
+      "Décrivez votre expérience avec AGT Platform. Comment la plateforme vous a-t-elle aidé dans votre activité ?",
     minChars: "Minimum 10 caractères",
     submitBtn: "Envoyer mon témoignage",
     successTitle: "Témoignage envoyé !",
@@ -5041,17 +5837,20 @@ export const fr = {
   },
 
   bug: {
-    subtitle: "Décrivez le problème rencontré. Notre équipe technique sera notifiée immédiatement.",
+    subtitle:
+      "Décrivez le problème rencontré. Notre équipe technique sera notifiée immédiatement.",
     categoryLabel: "Quelle partie de la plateforme est concernée ?",
     severityLabel: "Quel est l'impact sur votre activité ?",
     titleLabel: "Résumé du problème",
     titlePlaceholder: "Ex: Le bot ne répond plus depuis ce matin",
     descLabel: "Description détaillée",
-    descPlaceholder: "Décrivez précisément ce qui se passe, les étapes pour reproduire le problème...",
+    descPlaceholder:
+      "Décrivez précisément ce qui se passe, les étapes pour reproduire le problème...",
     minChars: "Minimum 20 caractères",
     submitBtn: "Envoyer le signalement",
     successTitle: "Signalement reçu !",
-    successBody: "Notre équipe technique a été notifiée. Nous reviendrons vers vous dès que possible.",
+    successBody:
+      "Notre équipe technique a été notifiée. Nous reviendrons vers vous dès que possible.",
     another: "Signaler un autre problème",
     successToast: "Signalement envoyé. Merci, nous allons investiguer !",
   },
@@ -5906,19 +6705,46 @@ export interface TestSessionDetail extends TestSessionSummary {
   emails: TestEmail[];
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// PLATFORM HELP (FAQ gérée par l'admin AGT)
-// ══════════════════════════════════════════════════════════════════════════════
-export type HelpCategorie = "general" | "bots" | "billing" | "rdv" | "technique";
+// ═══════════════════════════════════════════════════════════════════════════
+// DIFF À APPLIQUER MANUELLEMENT
+// Fichier cible : src/types/api/index.ts
+// Action        : AJOUTER ce bloc à la fin du fichier (juste avant la
+//                 dernière accolade ou en fin de fichier — peu importe l'ordre)
+// ═══════════════════════════════════════════════════════════════════════════
 
-export interface HelpEntry {
-  id: string;
-  categorie: HelpCategorie;
-  question_fr: string;
-  question_en: string;
-  reponse_fr: string;
-  reponse_en: string;
-  ordre: number;
+// ══════════════════════════════════════════════════════════════════════════════
+// WAHA / WHATSAPP SESSIONS
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Statuts possibles d'une session WhatsApp via WAHA. */
+export type WahaSessionStatus =
+  | "STARTING"
+  | "SCAN_QR_CODE"
+  | "WORKING"
+  | "STOPPED"
+  | "FAILED";
+
+/**
+ * Réponse de GET /api/v1/bots/{id}/whatsapp/status/
+ * Inclut qr_base64 quand status === "SCAN_QR_CODE".
+ */
+export interface WahaStatusResponse {
+  status: WahaSessionStatus;
+  phone_number: string; // Format: "237699000001" (sans le +)
+  connected_at: string | null; // ISO datetime
+  qr_base64: string | null; // PNG base64, présent uniquement en SCAN_QR_CODE
+}
+
+/** Réponse de POST /api/v1/bots/{id}/whatsapp/connect/ */
+export interface WahaConnectResponse {
+  status: WahaSessionStatus; // En général "STARTING"
+  phone_number: string;
+  connected_at: string | null;
+}
+
+/** Réponse de POST /api/v1/bots/{id}/whatsapp/disconnect/ */
+export interface WahaDisconnectResponse {
+  status: "STOPPED";
 }
 
 
@@ -8249,6 +9075,7 @@ export default function PmeBotsPage() {
 // FILE: src/app/pme/bots/[id]/test/page.tsx
 -----------------------------------------------
 // src/app/pme/bots/[id]/test/page.tsx
+// "https://api.salma.agtgroupholding.com/media/seed/bourses/demo_test.mp4"
 "use client";
 import {
   useState, useEffect, useRef, useCallback, useTransition,
@@ -8606,7 +9433,7 @@ export default function BotTestPage() {
             {/* ── Player vidéo vocal ── */}
             {canal === "vocal" && (
               <VoiceDemoPlayer
-              videoSrc="https://api.salma.agtgroupholding.com/media/seed/bourses/demo_test.mp4"
+              videoSrc="demo_test.mp4"
                 onCallStart={() => {
                   setIsVoiceCalling(true);
                   setTranscriptLines([]);
@@ -9981,7 +10808,7 @@ export function HumanTransferBlock({ transfer }: HumanTransferBlockProps) {
 
 
 // END OF FILE: src/app/pme/bots/[id]/test/_components/accordion-content/HumanTransferBlock.tsx
-  -> 50 / 116 fichiers traités...
+  -> 50 / 120 fichiers traités...
 
 // FILE: src/app/pme/bots/[id]/test/_components/accordion-content/EmailBotBlock.tsx
 -----------------------------------------------
@@ -10643,6 +11470,566 @@ export function ConversationReportModal({ conversation, onClose, d, colors }: Co
 
 // END OF FILE: src/app/pme/bots/_components/ConversationReportModal.tsx
 
+// FILE: src/app/pme/bots/_components/whatsapp/hooks/useWhatsAppConnection.ts
+-----------------------------------------------
+// src/app/pme/bots/_components/whatsapp/hooks/useWhatsAppConnection.ts
+"use client";
+
+import { useState, useCallback, useEffect, useRef } from "react";
+import { wahaRepository } from "@/repositories";
+import { ApiError } from "@/lib/api-client";
+import type { WahaSessionStatus } from "@/types/api";
+
+const POLLING_INTERVAL_MS = 2000;
+const MAX_POLLING_ATTEMPTS = 60; // 60 × 2s = 2 min max
+
+interface WhatsAppConnectionState {
+  status: WahaSessionStatus;
+  qrBase64: string | null;
+  phoneNumber: string;
+  connectedAt: string | null;
+  error: string | null;
+  isLoading: boolean;
+}
+
+export interface WhatsAppConnectionApi extends WhatsAppConnectionState {
+  connect: () => Promise<void>;
+  disconnect: () => Promise<void>;
+  cancel: () => Promise<void>;
+  reload: () => Promise<void>;
+}
+
+/**
+ * Gère le cycle de vie de la connexion WhatsApp d'un bot via WAHA.
+ *
+ * États : STOPPED → STARTING → SCAN_QR_CODE → WORKING (ou FAILED)
+ *
+ * Au montage : lit le statut courant.
+ * connect()  : POST /connect/ + démarre polling 2s.
+ * Polling    : rafraîchit qrBase64 + status. S'arrête sur WORKING/FAILED ou timeout 2 min.
+ * disconnect(): POST /disconnect/.
+ */
+export function useWhatsAppConnection(botId: string): WhatsAppConnectionApi {
+  const [state, setState] = useState<WhatsAppConnectionState>({
+    status: "STOPPED",
+    qrBase64: null,
+    phoneNumber: "",
+    connectedAt: null,
+    error: null,
+    isLoading: false,
+  });
+
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const attemptsRef = useRef<number>(0);
+
+  const stopPolling = useCallback((): void => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    attemptsRef.current = 0;
+  }, []);
+
+  const reload = useCallback(async (): Promise<void> => {
+    if (!botId) return;
+    try {
+      const data = await wahaRepository.getStatus(botId);
+      setState((s) => ({
+        ...s,
+        status: data.status,
+        qrBase64: data.qr_base64 ?? null,
+        phoneNumber: data.phone_number ?? "",
+        connectedAt: data.connected_at ?? null,
+        error: null,
+      }));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Erreur réseau";
+      setState((s) => ({ ...s, error: message }));
+    }
+  }, [botId]);
+
+  const startPolling = useCallback((): void => {
+    stopPolling();
+    attemptsRef.current = 0;
+
+    pollingRef.current = setInterval(async () => {
+      attemptsRef.current += 1;
+
+      if (attemptsRef.current > MAX_POLLING_ATTEMPTS) {
+        stopPolling();
+        setState((s) => ({
+          ...s,
+          status: "FAILED",
+          isLoading: false,
+          error: "Délai dépassé — QR code non scanné",
+        }));
+        return;
+      }
+
+      try {
+        const data = await wahaRepository.getStatus(botId);
+        setState((s) => ({
+          ...s,
+          status: data.status,
+          qrBase64: data.qr_base64 ?? null,
+          phoneNumber: data.phone_number ?? "",
+          connectedAt: data.connected_at ?? null,
+        }));
+
+        if (data.status === "WORKING" || data.status === "FAILED") {
+          stopPolling();
+          setState((s) => ({ ...s, isLoading: false }));
+        }
+      } catch {
+        // Erreur réseau ponctuelle : on continue à poller silencieusement
+      }
+    }, POLLING_INTERVAL_MS);
+  }, [botId, stopPolling]);
+
+  const connect = useCallback(async (): Promise<void> => {
+    if (!botId) return;
+    setState((s) => ({ ...s, isLoading: true, error: null }));
+    try {
+      const data = await wahaRepository.connect(botId);
+      setState((s) => ({
+        ...s,
+        status: data.status,
+        qrBase64: null,
+        phoneNumber: data.phone_number ?? "",
+        connectedAt: data.connected_at ?? null,
+      }));
+      startPolling();
+    } catch (err) {
+      stopPolling();
+      const message =
+        err instanceof ApiError ? err.message : "Erreur de connexion";
+      setState((s) => ({ ...s, isLoading: false, error: message }));
+    }
+  }, [botId, startPolling, stopPolling]);
+
+  const disconnect = useCallback(async (): Promise<void> => {
+    if (!botId) return;
+    setState((s) => ({ ...s, isLoading: true, error: null }));
+    stopPolling();
+    try {
+      await wahaRepository.disconnect(botId);
+      setState({
+        status: "STOPPED",
+        qrBase64: null,
+        phoneNumber: "",
+        connectedAt: null,
+        error: null,
+        isLoading: false,
+      });
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : "Erreur de déconnexion";
+      setState((s) => ({ ...s, isLoading: false, error: message }));
+    }
+  }, [botId, stopPolling]);
+
+  // Annulation pendant le scan QR : on libère la session côté backend
+  const cancel = useCallback(async (): Promise<void> => {
+    await disconnect();
+  }, [disconnect]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
+
+  return { ...state, connect, disconnect, cancel, reload };
+}
+// END OF FILE: src/app/pme/bots/_components/whatsapp/hooks/useWhatsAppConnection.ts
+
+
+// END OF FILE: src/app/pme/bots/_components/whatsapp/hooks/useWhatsAppConnection.ts
+
+// FILE: src/app/pme/bots/_components/whatsapp/QRCodeDisplay.tsx
+-----------------------------------------------
+// src/app/pme/bots/_components/whatsapp/QRCodeDisplay.tsx
+"use client";
+import { Smartphone } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+
+interface QRCodeDisplayProps {
+  qrBase64: string;
+}
+
+/**
+ * Affiche le QR code WhatsApp (PNG base64) avec instructions de scan.
+ * Version compacte pour la colonne droite (5/12).
+ */
+export function QRCodeDisplay({ qrBase64 }: QRCodeDisplayProps) {
+  const { dictionary: d } = useLanguage();
+  const t = d.bots.whatsapp;
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      {/* QR */}
+      <div className="p-2.5 bg-white rounded-2xl border border-[var(--border)] shadow-sm">
+        <img
+          src={`data:image/png;base64,${qrBase64}`}
+          alt={t.qrAlt}
+          width={192}
+          height={192}
+          className="block w-48 h-48"
+        />
+      </div>
+
+      {/* Instructions */}
+      <div className="w-full bg-[var(--bg-soft)] border border-[var(--border)] rounded-xl p-3">
+        <div className="flex items-center gap-1.5 mb-2">
+          <Smartphone className="w-3.5 h-3.5 text-[#25D366]" />
+          <h4 className="font-semibold text-xs text-[var(--text)]">
+            {t.qrInstructionsTitle}
+          </h4>
+        </div>
+        <ol className="space-y-1 text-[11px] text-[var(--text-muted)] list-decimal list-inside leading-snug">
+          <li>{t.qrStep1}</li>
+          <li>{t.qrStep2}</li>
+          <li>{t.qrStep3}</li>
+        </ol>
+        <p className="mt-2 pt-2 border-t border-[var(--border)] text-[10px] text-[var(--text-muted)] italic">
+          {t.qrExpireHint}
+        </p>
+      </div>
+    </div>
+  );
+}
+// END OF FILE: src/app/pme/bots/_components/whatsapp/QRCodeDisplay.tsx
+
+
+// END OF FILE: src/app/pme/bots/_components/whatsapp/QRCodeDisplay.tsx
+
+// FILE: src/app/pme/bots/_components/whatsapp/ConnectionStatus.tsx
+-----------------------------------------------
+// src/app/pme/bots/_components/whatsapp/ConnectionStatus.tsx
+"use client";
+import { CheckCircle2, Phone, Clock } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+
+interface ConnectionStatusProps {
+  phoneNumber: string;
+  connectedAt: string | null;
+}
+
+/**
+ * Affiche les infos d'une session WhatsApp connectée.
+ * Version compacte pour la colonne droite.
+ */
+export function ConnectionStatus({
+  phoneNumber,
+  connectedAt,
+}: ConnectionStatusProps) {
+  const { dictionary: d, locale } = useLanguage();
+  const t = d.bots.whatsapp;
+
+  const formatPhone = (raw: string): string => {
+    if (!raw) return "—";
+    if (raw.length < 9) return `+${raw}`;
+    return `+${raw.slice(0, 3)} ${raw.slice(3, 6)} ${raw.slice(6, 9)} ${raw.slice(9)}`.trim();
+  };
+
+  const formatDate = (iso: string | null): string => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString(locale === "fr" ? "fr-FR" : "en-US", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return iso;
+    }
+  };
+
+  return (
+    <div className="space-y-2.5">
+      {/* Badge */}
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-full text-[11px] font-medium">
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        <span>{t.statusWorking}</span>
+      </div>
+
+      {/* Carte info compacte */}
+      <div className="bg-[var(--bg-soft)] border border-[var(--border)] rounded-xl p-3 space-y-2.5">
+        <div>
+          <div className="flex items-center gap-1.5 mb-0.5 text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-semibold">
+            <Phone className="w-2.5 h-2.5" />
+            <span>{t.phoneLabel}</span>
+          </div>
+          <p className="text-sm font-mono font-semibold text-[var(--text)]">
+            {formatPhone(phoneNumber)}
+          </p>
+        </div>
+
+        <div className="pt-2 border-t border-[var(--border)]">
+          <div className="flex items-center gap-1.5 mb-0.5 text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-semibold">
+            <Clock className="w-2.5 h-2.5" />
+            <span>{t.connectedAtLabel}</span>
+          </div>
+          <p className="text-xs text-[var(--text)]">
+            {formatDate(connectedAt)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+// END OF FILE: src/app/pme/bots/_components/whatsapp/ConnectionStatus.tsx
+
+
+// END OF FILE: src/app/pme/bots/_components/whatsapp/ConnectionStatus.tsx
+
+// FILE: src/app/pme/bots/_components/whatsapp/WhatsAppPanel.tsx
+-----------------------------------------------
+// src/app/pme/bots/_components/whatsapp/WhatsAppPanel.tsx
+"use client";
+import { useState, useEffect } from "react";
+import {
+  MessageCircle,
+  AlertCircle,
+  AlertTriangle,
+  Loader2,
+  Power,
+  Link as LinkIcon,
+  X,
+  RefreshCw,
+} from "lucide-react";
+import { Spinner } from "@/components/ui";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useToast } from "@/components/ui/Toast";
+import { cn } from "@/lib/utils";
+
+import { useWhatsAppConnection } from "./hooks/useWhatsAppConnection";
+import { QRCodeDisplay } from "./QRCodeDisplay";
+import { ConnectionStatus } from "./ConnectionStatus";
+
+interface WhatsAppPanelProps {
+  /** UUID du bot WhatsApp */
+  botId: string;
+  /** Le bot est-il publié (statut === "actif") ? */
+  isBotPublished: boolean;
+  /** Callback quand l'état devient WORKING ou non-WORKING */
+  onConnectionChange?: (connected: boolean) => void;
+}
+
+/**
+ * Panneau de connexion WhatsApp d'un bot via WAHA.
+ * Conçu pour s'intégrer dans la colonne droite (5/12) de l'onglet Paramètres.
+ */
+export function WhatsAppPanel({
+  botId,
+  isBotPublished,
+  onConnectionChange,
+}: WhatsAppPanelProps) {
+  const { dictionary: d } = useLanguage();
+  const t = d.bots.whatsapp;
+  const toast = useToast();
+
+  const {
+    status,
+    qrBase64,
+    phoneNumber,
+    connectedAt,
+    error,
+    isLoading,
+    connect,
+    disconnect,
+    cancel,
+  } = useWhatsAppConnection(botId);
+
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+
+  useEffect(() => {
+    onConnectionChange?.(status === "WORKING");
+  }, [status, onConnectionChange]);
+
+  const handleConnect = async (): Promise<void> => {
+    if (!isBotPublished) {
+      toast.error(t.errorBotNotPublished);
+      return;
+    }
+    await connect();
+  };
+
+  const handleConfirmDisconnect = async (): Promise<void> => {
+    setShowDisconnectConfirm(false);
+    await disconnect();
+    toast.success(t.disconnectSuccess);
+  };
+
+  const isWorking = status === "WORKING";
+  const canConnect =
+    isBotPublished && (status === "STOPPED" || status === "FAILED");
+
+  return (
+    <div className="bg-[var(--bg)] border border-[var(--border)] rounded-3xl p-5 space-y-4">
+      {/* ─── En-tête compact ──────────────────────── */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+            <MessageCircle className="w-4 h-4 text-[#25D366]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-[var(--text)]">
+              {t.panelTitle}
+            </h3>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+              {t.panelSubtitle}
+            </p>
+          </div>
+        </div>
+
+        {isWorking && (
+          <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[9px] font-bold rounded-full uppercase tracking-widest flex-shrink-0">
+            {t.statusWorking}
+          </span>
+        )}
+      </div>
+
+      {/* ─── Avertissement bot non publié ────────── */}
+      {!isBotPublished && !isWorking && (
+        <div className="flex items-start gap-2.5 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+            <strong className="font-semibold">{t.notPublishedTitle}.</strong>{" "}
+            {t.notPublishedMessage}
+          </p>
+        </div>
+      )}
+
+      {/* ─── Erreur backend ──────────────────────── */}
+      {error && (
+        <div className="flex items-start gap-2.5 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-red-800 dark:text-red-300 leading-relaxed">
+            {error}
+          </p>
+        </div>
+      )}
+
+      {/* ═══════════════ ÉTATS ═══════════════ */}
+
+      {/* STOPPED ou FAILED */}
+      {(status === "STOPPED" || status === "FAILED") && !isLoading && (
+        <div className="space-y-3">
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            {t.descriptionStopped}
+          </p>
+
+          <button
+            onClick={handleConnect}
+            disabled={!canConnect}
+            className={cn(
+              "w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all",
+              canConnect
+                ? "bg-[#25D366] hover:bg-[#1FBA5A] text-white shadow-sm"
+                : "bg-[var(--bg-soft)] text-[var(--text-muted)] cursor-not-allowed",
+            )}
+          >
+            {status === "FAILED" ? (
+              <RefreshCw className="w-4 h-4" />
+            ) : (
+              <LinkIcon className="w-4 h-4" />
+            )}
+            <span>{status === "FAILED" ? t.retryButton : t.connectButton}</span>
+          </button>
+        </div>
+      )}
+
+      {/* STARTING */}
+      {status === "STARTING" && (
+        <div className="flex flex-col items-center justify-center py-8 gap-3">
+          <Loader2 className="w-8 h-8 text-[#25D366] animate-spin" />
+          <p className="text-xs text-[var(--text-muted)] text-center">
+            {t.startingMessage}
+          </p>
+        </div>
+      )}
+
+      {/* SCAN_QR_CODE */}
+      {status === "SCAN_QR_CODE" && qrBase64 && (
+        <div className="space-y-3">
+          <QRCodeDisplay qrBase64={qrBase64} />
+          <button
+            onClick={() => void cancel()}
+            disabled={isLoading}
+            className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-[var(--border)] text-xs text-[var(--text)] hover:bg-[var(--bg-soft)] transition-colors disabled:opacity-50"
+          >
+            <X className="w-3.5 h-3.5" />
+            <span>{d.common.cancel}</span>
+          </button>
+        </div>
+      )}
+
+      {/* SCAN_QR_CODE sans QR */}
+      {status === "SCAN_QR_CODE" && !qrBase64 && (
+        <div className="flex flex-col items-center justify-center py-8 gap-3">
+          <Spinner />
+          <p className="text-xs text-[var(--text-muted)]">{t.qrGenerating}</p>
+        </div>
+      )}
+
+      {/* WORKING */}
+      {status === "WORKING" && (
+        <div className="space-y-3">
+          <ConnectionStatus
+            phoneNumber={phoneNumber}
+            connectedAt={connectedAt}
+          />
+
+          {!showDisconnectConfirm ? (
+            <button
+              onClick={() => setShowDisconnectConfirm(true)}
+              disabled={isLoading}
+              className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+            >
+              <Power className="w-3.5 h-3.5" />
+              <span>{t.disconnectButton}</span>
+            </button>
+          ) : (
+            <div className="bg-[var(--bg-soft)] border border-[var(--border)] rounded-xl p-3 space-y-2.5">
+              <p className="text-xs text-[var(--text)] font-semibold">
+                {t.disconnectConfirmTitle}
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                {t.disconnectConfirmBody}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => void handleConfirmDisconnect()}
+                  disabled={isLoading}
+                  className="flex-1 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-2"
+                >
+                  {isLoading && <Spinner />}
+                  <span>{t.disconnectConfirmButton}</span>
+                </button>
+                <button
+                  onClick={() => setShowDisconnectConfirm(false)}
+                  disabled={isLoading}
+                  className="flex-1 px-3 py-2 rounded-xl border border-[var(--border)] text-xs text-[var(--text)] hover:bg-[var(--bg)] transition-colors disabled:opacity-50"
+                >
+                  {d.common.cancel}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+// END OF FILE: src/app/pme/bots/_components/whatsapp/WhatsAppPanel.tsx
+
+
+// END OF FILE: src/app/pme/bots/_components/whatsapp/WhatsAppPanel.tsx
+
 // FILE: src/app/pme/bots/_components/bots.types.ts
 -----------------------------------------------
 // src/app/pme/bots/_components/bots.types.ts
@@ -11160,14 +12547,24 @@ export function BotPairCard({
 -----------------------------------------------
 // src/app/pme/bots/_components/tabs/BotSettingsPanel.tsx
 "use client";
-import { useState } from "react";
-import { Settings, MessageSquare, Phone, Globe, Activity, AlertCircle, Save } from "lucide-react";
+import { useState, useMemo } from "react";
+import {
+  Settings,
+  MessageSquare,
+  Phone,
+  Globe,
+  Activity,
+  AlertCircle,
+  Save,
+  ShieldCheck,
+} from "lucide-react";
 import { Badge, Spinner } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { botsRepository } from "@/repositories";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/components/ui/Toast";
 import type { BotPair } from "../bots.types";
+import { WhatsAppPanel } from "../whatsapp/WhatsAppPanel";
 
 interface BotSettingsPanelProps {
   pair: BotPair;
@@ -11176,17 +12573,31 @@ interface BotSettingsPanelProps {
   onRefresh: () => void;
 }
 
-export function BotSettingsPanel({ pair, d, colors, onRefresh }: BotSettingsPanelProps) {
+export function BotSettingsPanel({
+  pair,
+  d,
+  onRefresh,
+}: BotSettingsPanelProps) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
-  const [mainName,         setMainName]         = useState(pair.waBot.nom);
-  const [waDisplayName,    setWaDisplayName]    = useState(pair.waBot.nom);
-  const [voiceDisplayName, setVoiceDisplayName] = useState(pair.voiceBot?.nom ?? "");
+  const [mainName, setMainName] = useState(pair.waBot.nom);
+  const [waDisplayName, setWaDisplayName] = useState(pair.waBot.nom);
+  const [voiceDisplayName, setVoiceDisplayName] = useState(
+    pair.voiceBot?.nom ?? "",
+  );
+
+  // ── État de connexion WhatsApp synchronisé via le callback du panneau ──
+  const [isWaConnected, setIsWaConnected] = useState(false);
+
+  const isActive = pair.waBot.statut === "actif";
+  const phoneDisplay = pair.waBot.numero_value ?? "Non configuré";
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await botsRepository.patch(pair.waBot.id, { nom: waDisplayName || mainName });
+      await botsRepository.patch(pair.waBot.id, {
+        nom: waDisplayName || mainName,
+      });
       if (pair.voiceBot && voiceDisplayName) {
         await botsRepository.patch(pair.voiceBot.id, { nom: voiceDisplayName });
       }
@@ -11199,13 +12610,57 @@ export function BotSettingsPanel({ pair, d, colors, onRefresh }: BotSettingsPane
     }
   };
 
-  const isActive     = pair.waBot.statut === "actif";
-  const phoneDisplay = pair.waBot.numero_value ?? "Non configuré";
+  // ── Lignes du bloc statut (mémorisées pour éviter re-renders inutiles) ──
+  const statusRows = useMemo(
+    () => [
+      {
+        key: "llm",
+        label: "Moteur IA",
+        value: (
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#25D366]" />
+            <span className="text-xs font-bold text-[#25D366]">IA locale</span>
+          </div>
+        ),
+        sub: "Ollama · serveur AGT",
+      },
+      {
+        key: "wa",
+        label: "Canal WhatsApp",
+        value: (
+          <span
+            className={cn(
+              "text-xs font-bold",
+              isWaConnected ? "text-[#25D366]" : "text-white/40",
+            )}
+          >
+            {isWaConnected ? "Connecté" : "Non connecté"}
+          </span>
+        ),
+      },
+      {
+        key: "voice",
+        label: "Canal Vocal",
+        value: (
+          <span
+            className={cn(
+              "text-xs font-bold",
+              pair.voiceBot ? "text-sky-300" : "text-white/40",
+            )}
+          >
+            {pair.voiceBot ? "Configuré" : "Non configuré"}
+          </span>
+        ),
+      },
+    ],
+    [isWaConnected, pair.voiceBot],
+  );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
-      {/* ── Colonne gauche : formulaire (7/12) ── */}
+      {/* ═══════════════ COLONNE GAUCHE — Formulaire (7/12) ═══════════════ */}
       <div className="lg:col-span-7 space-y-6">
+        {/* Identité des agents */}
         <div className="bg-[var(--bg)] p-6 rounded-3xl border border-[var(--border)] space-y-6">
           <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
             <Settings className="w-4 h-4 text-[var(--text-muted)]" />
@@ -11215,31 +12670,48 @@ export function BotSettingsPanel({ pair, d, colors, onRefresh }: BotSettingsPane
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className="label-base font-bold mb-1.5 block">Nom interne du projet</label>
-              <input className="input-base bg-white" value={mainName}
-                onChange={e => setMainName(e.target.value)} placeholder="Ex: Pharma Bot" />
+              <label className="label-base font-bold mb-1.5 block">
+                Nom interne du projet
+              </label>
+              <input
+                className="input-base bg-white"
+                value={mainName}
+                onChange={(e) => setMainName(e.target.value)}
+                placeholder="Ex: Pharma Bot"
+              />
             </div>
             <div>
               <label className="label-base font-bold mb-1.5 flex items-center gap-2">
-                <MessageSquare className="w-3.5 h-3.5 text-[#25D366]" /> Nom WhatsApp
+                <MessageSquare className="w-3.5 h-3.5 text-[#25D366]" /> Nom
+                WhatsApp
               </label>
-              <input className="input-base bg-white" value={waDisplayName}
-                onChange={e => setWaDisplayName(e.target.value)} placeholder="Ex: Sophie" />
+              <input
+                className="input-base bg-white"
+                value={waDisplayName}
+                onChange={(e) => setWaDisplayName(e.target.value)}
+                placeholder="Ex: Sophie"
+              />
             </div>
             <div>
               <label className="label-base font-bold mb-1.5 flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-[#6C3CE1]" /> Nom Vocal
               </label>
-              <input className="input-base bg-white" value={voiceDisplayName}
-                onChange={e => setVoiceDisplayName(e.target.value)} placeholder="Ex: Voix Sophie"
-                disabled={!pair.voiceBot} />
+              <input
+                className="input-base bg-white"
+                value={voiceDisplayName}
+                onChange={(e) => setVoiceDisplayName(e.target.value)}
+                placeholder="Ex: Voix Sophie"
+                disabled={!pair.voiceBot}
+              />
             </div>
           </div>
         </div>
 
+        {/* Numéro de téléphone */}
         <div className="bg-[var(--bg)] p-6 rounded-3xl border border-[var(--border)]">
           <label className="label-base font-bold mb-3 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-sky-500" /> Numéro de téléphone assigné
+            <Globe className="w-4 h-4 text-sky-500" /> Numéro de téléphone
+            assigné
           </label>
           <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-[var(--border)] shadow-sm">
             <div className="flex items-center gap-3">
@@ -11251,7 +12723,9 @@ export function BotSettingsPanel({ pair, d, colors, onRefresh }: BotSettingsPane
                   {phoneDisplay}
                 </p>
                 <p className="text-[10px] text-[var(--text-muted)] uppercase font-bold">
-                  {pair.waBot.numero_value ? "Ligne active • AGT Telecom" : "Aucun numéro assigné"}
+                  {pair.waBot.numero_value
+                    ? "Ligne active • AGT Telecom"
+                    : "Aucun numéro assigné"}
                 </p>
               </div>
             </div>
@@ -11259,59 +12733,95 @@ export function BotSettingsPanel({ pair, d, colors, onRefresh }: BotSettingsPane
           </div>
         </div>
 
-        <div className="flex justify-end pt-4">
-          <button onClick={handleSave} disabled={saving}
-            className="btn-primary px-8 py-3 shadow-lg shadow-[#075E54]/20 flex items-center gap-2 transition-all hover:scale-[1.02]">
-            {saving ? <Spinner className="border-white/30 border-t-white" /> : <Save className="w-4 h-4" />}
+        {/* Bouton Enregistrer */}
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="btn-primary px-8 py-3 shadow-lg shadow-[#075E54]/20 flex items-center gap-2 transition-all hover:scale-[1.02]"
+          >
+            {saving ? (
+              <Spinner className="border-white/30 border-t-white" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
             Enregistrer les modifications
           </button>
         </div>
       </div>
 
-      {/* ── Colonne droite : résumé & statut (5/12) ── */}
+      {/* ═══════════════ COLONNE DROITE — Statut + WhatsApp (5/12) ═══════════════ */}
       <div className="lg:col-span-5 space-y-6">
-        <div className="bg-[#075E54] text-white p-8 rounded-[2.5rem] relative overflow-hidden shadow-2xl">
+        {/* ── Statut en direct (épuré, sans données simulées) ── */}
+        <div className="bg-[#075E54] text-white p-6 rounded-[2rem] relative overflow-hidden shadow-2xl">
           <div className="relative z-10">
             <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-4">
-              Statut en direct
+              Statut
             </p>
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
-                <Activity className="w-8 h-8 text-[#25D366]" />
+
+            {/* Header statut */}
+            <div className="flex items-center gap-4 mb-5">
+              <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                <Activity
+                  className={cn(
+                    "w-7 h-7",
+                    isActive ? "text-[#25D366]" : "text-white/40",
+                  )}
+                />
               </div>
               <div>
-                <h4 className="text-xl font-black">{isActive ? "Opérationnel" : "En pause"}</h4>
-                <p className="text-white/60 text-xs">Dernière activité il y a 2 min</p>
+                <h4 className="text-lg font-black">
+                  {isActive ? "Opérationnel" : "En pause"}
+                </h4>
+                <p className="text-white/60 text-xs">
+                  {isActive
+                    ? "Bot publié et prêt à répondre"
+                    : "Bot non publié — pas de réponses automatiques"}
+                </p>
               </div>
             </div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
-                <span className="text-xs">Intelligence (LLM)</span>
-                <Badge className="bg-[#25D366] text-[#075E54] border-none">Gemini Pro</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
-                <span className="text-xs">Canal WhatsApp</span>
-                <span className="text-xs font-bold text-[#25D366]">Connecté</span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
-                <span className="text-xs">Canal Vocal</span>
-                <span className={cn("text-xs font-bold", pair.voiceBot ? "text-sky-300" : "text-white/40")}>
-                  {pair.voiceBot ? "Prêt" : "Non configuré"}
-                </span>
-              </div>
+
+            {/* Lignes d'info */}
+            <div className="space-y-2.5">
+              {statusRows.map((row) => (
+                <div
+                  key={row.key}
+                  className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-xs">{row.label}</span>
+                    {row.sub && (
+                      <span className="text-[10px] text-white/40 mt-0.5">
+                        {row.sub}
+                      </span>
+                    )}
+                  </div>
+                  {row.value}
+                </div>
+              ))}
             </div>
           </div>
           <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-[#25D366] rounded-full blur-[80px] opacity-20" />
         </div>
 
-        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-6 rounded-3xl">
-          <div className="flex gap-4">
-            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+        {/* ── Connexion WhatsApp (le panneau livré précédemment) ── */}
+        <WhatsAppPanel
+          botId={pair.waBot.id}
+          isBotPublished={isActive}
+          onConnectionChange={setIsWaConnected}
+        />
+
+        {/* ── Aide AGT (compact) ── */}
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-4 rounded-2xl">
+          <div className="flex gap-3">
+            <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-bold text-amber-900 dark:text-amber-100 mb-1">Besoin d&apos;aide ?</p>
-              <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
-                Si vous souhaitez changer de numéro ou modifier les capacités profondes de l&apos;IA,
-                veuillez contacter votre conseiller AGT.
+              <p className="text-xs font-bold text-amber-900 dark:text-amber-100 mb-0.5">
+                Besoin d&apos;aide ?
+              </p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                Pour changer de numéro ou modifier les capacités profondes de
+                l&apos;IA, contactez votre conseiller AGT.
               </p>
             </div>
           </div>
@@ -11320,6 +12830,7 @@ export function BotSettingsPanel({ pair, d, colors, onRefresh }: BotSettingsPane
     </div>
   );
 }
+// END OF FILE: src/app/pme/bots/_components/tabs/BotSettingsPanel.tsx
 
 
 // END OF FILE: src/app/pme/bots/_components/tabs/BotSettingsPanel.tsx
@@ -18285,6 +19796,7 @@ export function RecentConversations({ conversations, onSelect, labels }: Props) 
 
 
 // END OF FILE: src/app/pme/dashboard/_components/RecentConversations.tsx
+  -> 100 / 120 fichiers traités...
 
 // FILE: src/app/pme/dashboard/_components/KpiCards.tsx
 -----------------------------------------------
@@ -19118,7 +20630,6 @@ function GoogleSignupButton({ onSuccess, onError, label }: {
 
 
 // END OF FILE: src/app/onboarding/page.tsx
-  -> 100 / 116 fichiers traités...
 
 // FILE: src/app/sitemap.ts
 -----------------------------------------------
@@ -20285,7 +21796,8 @@ export default function LandingPage() {
         <div className="relative rounded-3xl overflow-hidden border border-[var(--border)] shadow-modal bg-[var(--bg-card)] group">
           <video
             ref={videoRef}
-            src="https://api.salma.agtgroupholding.com/media/seed/bourses/demo.mp4"
+            // https://api.salma.agtgroupholding.com/media/seed/bourses/demo.mp4
+            src="demo.mp4"
             className="w-full aspect-video object-cover"
             playsInline
             preload="metadata"
