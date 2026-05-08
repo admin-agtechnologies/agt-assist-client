@@ -903,3 +903,88 @@ export interface WahaConnectResponse {
 export interface WahaDisconnectResponse {
   status: "STOPPED";
 }
+
+export interface CrmContactCard {
+  id: string;
+  nom: string;
+  telephone: string;
+  email: string;
+  created_at: string | null;
+
+  // Agrégats
+  nb_conversations: number;
+  nb_rdv: number;
+  nb_transferts: number;
+  nb_emails: number;
+  last_contact_at: string | null;
+
+  // Aperçu de la dernière fiche
+  last_resume: string;
+  last_bot_nom: string | null;
+  last_bot_type: "whatsapp" | "vocal" | string | null;
+  has_handoff: boolean;
+}
+
+export interface CrmContactConversation {
+  id: string;
+  bot_id: string | null;
+  bot_nom: string;
+  bot_type: string;
+  canal: string | null;
+  statut: string;
+  human_handoff: boolean;
+  nb_messages: number;
+  dernier_message: string;
+  dernier_message_at: string | null;
+  created_at: string | null;
+  rapport_resume: string;
+  rapport_points_cles: string[];
+  rapport_rdv: number;
+  rapport_emails: number;
+  rapport_handoffs: number;
+}
+
+export interface CrmContactBotRef {
+  id: string;
+  nom: string;
+  bot_type: string;
+}
+
+export interface CrmContactDetail {
+  id: string;
+  nom: string;
+  telephone: string;
+  email: string;
+  created_at: string | null;
+
+  nb_conversations: number;
+  nb_rdv: number;
+  nb_emails: number;
+  nb_transferts: number;
+  last_contact_at: string | null;
+
+  last_resume: string;
+  last_points_cles: string[];
+  last_actions: { type: string; label: string; detail: string }[];
+
+  bots: CrmContactBotRef[];
+  conversations: CrmContactConversation[];
+}
+
+export interface CrmFilters {
+  search?: string;
+  bot?: string;
+  has_rdv?: boolean;
+  has_handoff?: boolean;
+  ordering?:
+    | "nom"
+    | "-nom"
+    | "last_contact_at"
+    | "-last_contact_at"
+    | "nb_conversations"
+    | "-nb_conversations"
+    | "created_at"
+    | "-created_at";
+  page?: number;
+  page_size?: number;
+}

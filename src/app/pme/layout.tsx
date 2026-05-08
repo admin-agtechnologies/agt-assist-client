@@ -16,6 +16,7 @@ import { ROUTES } from "@/lib/constants";
 import {
   LayoutDashboard,
   Bot,
+  Users,
   CalendarDays,
   CreditCard,
   UserCircle,
@@ -36,6 +37,7 @@ import { SupportWidgets } from "@/components/SupportWidgets";
 const navItems = (t: ReturnType<typeof useLanguage>["dictionary"]) => [
   { href: ROUTES.dashboard, icon: LayoutDashboard, label: t.nav.dashboard },
   { href: ROUTES.bots, icon: Bot, label: t.nav.bots },
+  { href: ROUTES.crm, icon: Users, label: t.nav.crm },
   { href: ROUTES.knowledge, icon: BookOpen, label: t.nav.knowledge },
   { href: ROUTES.appointments, icon: CalendarDays, label: t.nav.appointments },
   { href: ROUTES.billing, icon: CreditCard, label: t.nav.billing },
@@ -45,8 +47,8 @@ const navItems = (t: ReturnType<typeof useLanguage>["dictionary"]) => [
 export default function PmeLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const { dictionary: d, locale, setLocale } = useLanguage();
-  const { theme: uiTheme, toggle } = useTheme();   // ← renommé uiTheme
-  const { theme: sectorTheme } = useSector();       // ← renommé sectorTheme
+  const { theme: uiTheme, toggle } = useTheme(); // ← renommé uiTheme
+  const { theme: sectorTheme } = useSector(); // ← renommé sectorTheme
   const pathname = usePathname();
   const router = useRouter();
   const toast = useToast();
@@ -55,8 +57,9 @@ export default function PmeLayout({ children }: { children: ReactNode }) {
 
   // ── Charger l'état du tutoriel ────────────────────────────────────────────
   useEffect(() => {
-    tutorialRepository.getProgress()
-      .then(res => setTutorialDone(res.has_completed_tutorial))
+    tutorialRepository
+      .getProgress()
+      .then((res) => setTutorialDone(res.has_completed_tutorial))
       .catch(() => {});
   }, []);
 
@@ -180,7 +183,6 @@ export default function PmeLayout({ children }: { children: ReactNode }) {
 
       {/* Footer */}
       <div className="p-4 border-t border-[var(--border)] space-y-1">
-
         <Link
           href={ROUTES.tutorial}
           onClick={() => setSidebarOpen(false)}
@@ -276,11 +278,13 @@ export default function PmeLayout({ children }: { children: ReactNode }) {
   return (
     <div
       className="flex h-screen overflow-hidden bg-[var(--bg)]"
-      style={{
-        "--color-primary": sectorTheme.primary,
-        "--color-accent": sectorTheme.accent,
-        "--color-bg": sectorTheme.bg,
-      } as React.CSSProperties}
+      style={
+        {
+          "--color-primary": sectorTheme.primary,
+          "--color-accent": sectorTheme.accent,
+          "--color-bg": sectorTheme.bg,
+        } as React.CSSProperties
+      }
     >
       <Sidebar />
 

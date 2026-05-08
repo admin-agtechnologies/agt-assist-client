@@ -17,7 +17,12 @@ export const WHATSAPP_PROVIDERS = ["waha", "meta_api"] as const;
 export const VOICE_AI_PROVIDERS = ["gemini", "openai"] as const;
 export const PHONE_OPERATORS = ["twilio", "orange", "mtn", "camtel"] as const;
 export const BOT_STATUSES = ["active", "paused", "archived"] as const;
-export const APPOINTMENT_STATUSES = ["pending", "confirmed", "done", "cancelled"] as const;
+export const APPOINTMENT_STATUSES = [
+  "pending",
+  "confirmed",
+  "done",
+  "cancelled",
+] as const;
 
 // ── Routing centralisé ────────────────────────────────────────────────────────
 export const ROUTES = {
@@ -31,6 +36,7 @@ export const ROUTES = {
   magicLink: "/magic-link",
   dashboard: "/dashboard",
   bots: "/pme/bots",
+  crm: "/pme/crm",
   services: "/pme/services",
   appointments: "/pme/appointments",
   billing: "/pme/billing",
@@ -57,10 +63,10 @@ export const PLANS_CONFIG = [
     price: 10_000,
     currency: "XAF",
     billing_cycle: "monthly",
-    messages_limit: 2_000,
+    messages_limit: 1_000,
     calls_limit: 0,
     bots_limit: 2,
-    appointments_limit: 10,
+    appointments_limit: 30,
     emails_limit: 50,
     highlight: false,
     features_keys: [

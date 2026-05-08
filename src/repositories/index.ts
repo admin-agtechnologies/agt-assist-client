@@ -84,6 +84,9 @@ import type {
   TestSessionDetail,
   // Platform help
   HelpEntry,
+  CrmContactCard,
+  CrmContactDetail,
+  CrmFilters,
 } from "@/types/api";
 import type {
   ClaimBonusResponse,
@@ -574,7 +577,9 @@ export const statsRepository = {
   getAdmin: (): Promise<AdminStats> =>
     api.get<AdminStats>("/api/v1/dashboard/admin/"),
   getWeekly: (): Promise<WeeklyDataPoint[]> =>
-    api.get<WeeklyDataPoint[]>("/api/v1/dashboard/entreprise/weekly/").catch(() => []),
+    api
+      .get<WeeklyDataPoint[]>("/api/v1/dashboard/entreprise/weekly/")
+      .catch(() => []),
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -818,14 +823,20 @@ export const onboardingRepository = {
 };
 
 export const tutorialRepository = {
-  getProgress: (): Promise<{ last_step: number; has_completed_tutorial: boolean }> =>
-    api.get("/api/v1/onboarding/tutorial/"),
+  getProgress: (): Promise<{
+    last_step: number;
+    has_completed_tutorial: boolean;
+  }> => api.get("/api/v1/onboarding/tutorial/"),
 
-  saveStep: (last_step: number): Promise<{ last_step: number; has_completed_tutorial: boolean }> =>
+  saveStep: (
+    last_step: number,
+  ): Promise<{ last_step: number; has_completed_tutorial: boolean }> =>
     api.patch("/api/v1/onboarding/tutorial/", { last_step }),
 
-  complete: (): Promise<{ last_step: number; has_completed_tutorial: boolean }> =>
-    api.patch("/api/v1/onboarding/tutorial/", { completed: true }),
+  complete: (): Promise<{
+    last_step: number;
+    has_completed_tutorial: boolean;
+  }> => api.patch("/api/v1/onboarding/tutorial/", { completed: true }),
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -923,4 +934,41 @@ export const wahaRepository = {
   /** POST — Stoppe la session WhatsApp et libère le bot. */
   disconnect: (botId: string): Promise<WahaDisconnectResponse> =>
     api.post(`/api/v1/bots/${botId}/whatsapp/disconnect/`, {}),
+};
+
+export const crmRepository = {
+  // Helper interne pour transformer les filtres en query string
+  _buildParams: (f?: CrmFilters): Record<string, string> => {
+    if (!f) return {};
+    const out: Record<string, string> = {};
+    if (f.search) out.search = f.search;
+    if (f.bot) out.bot = f.bot;
+    if (f.has_rdv) out.has_rdv = "true";
+    if (f.has_handoff) out.has_handoff = "true";
+    if (f.ordering) out.ordering = f.ordering;
+    if (f.page) out.page = String(f.page);
+    if (f.page_size) out.page_size = String(f.page_size);
+    return out;
+  },
+
+  /** Liste paginée des contacts CRM avec agrégats. */
+  getList: (f?: CrmFilters): Promise<PaginatedResponse<CrmContactCard>> =>
+    api
+      .get("/api/v1/appointments/crm/", {
+        params: crmRepository._buildParams(f),
+      })
+      .then((data: unknown) =>
+        Array.isArray(data)
+          ? {
+              results: data as CrmContactCard[],
+              count: (data as CrmContactCard[]).length,
+              next: null,
+              previous: null,
+            }
+          : (data as PaginatedResponse<CrmContactCard>),
+      ),
+
+  /** Fiche détaillée d'un contact (toutes ses conversations + rapports). */
+  getById: (id: string): Promise<CrmContactDetail> =>
+    api.get(`/api/v1/appointments/crm/${id}/`),
 };
