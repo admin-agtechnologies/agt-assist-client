@@ -976,6 +976,7 @@ export interface CrmFilters {
   bot?: string;
   has_rdv?: boolean;
   has_handoff?: boolean;
+  has_conversations?: boolean;
   ordering?:
     | "nom"
     | "-nom"

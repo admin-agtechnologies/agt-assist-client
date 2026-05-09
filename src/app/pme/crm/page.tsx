@@ -36,6 +36,7 @@ export default function CrmPage() {
   const [selectedBotId, setSelectedBotId] = useState<string | "">("");
   const [hasRdv, setHasRdv] = useState(false);
   const [hasHandoff, setHasHandoff] = useState(false);
+  const [hasConversations, setHasConversations] = useState(true); // ← nouveau
   const [ordering, setOrdering] = useState<SortKey>("-last_contact_at");
   const [page, setPage] = useState(1);
 
@@ -48,7 +49,14 @@ export default function CrmPage() {
   // Reset page quand un filtre change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, selectedBotId, hasRdv, hasHandoff, ordering]);
+  }, [
+    debouncedSearch,
+    selectedBotId,
+    hasRdv,
+    hasHandoff,
+    hasConversations,
+    ordering,
+  ]);
 
   // ── Chargement bots (1 seule fois) ────────────────────────────────────────
   useEffect(() => {
@@ -71,6 +79,7 @@ export default function CrmPage() {
           bot: selectedBotId || undefined,
           has_rdv: hasRdv || undefined,
           has_handoff: hasHandoff || undefined,
+          has_conversations: hasConversations || undefined,
           ordering,
           page,
           page_size: PAGE_SIZE,
@@ -85,7 +94,15 @@ export default function CrmPage() {
       setRefreshing(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, selectedBotId, hasRdv, hasHandoff, ordering, page]);
+  }, [
+    debouncedSearch,
+    selectedBotId,
+    hasRdv,
+    hasHandoff,
+    hasConversations,
+    ordering,
+    page,
+  ]);
 
   useEffect(() => {
     fetchContacts();
@@ -142,6 +159,8 @@ export default function CrmPage() {
         onOrderingChange={setOrdering}
         onRefresh={handleRefresh}
         loading={refreshing}
+        hasConversations={hasConversations}
+        onHasConversationsChange={setHasConversations}
       />
 
       {/* ── Layout liste + panneau ───────────────────────────────────────── */}

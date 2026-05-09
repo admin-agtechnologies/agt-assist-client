@@ -273,7 +273,7 @@ export function ConversationReportModal({
                           <span className="text-[#25D366] mt-0.5 flex-shrink-0">
                             •
                           </span>
-                          <span>{pt}</span>
+                          <span>{typeof pt === "string" ? pt : ""}</span>
                         </li>
                       ))}
                     </ul>
@@ -288,6 +288,16 @@ export function ConversationReportModal({
                     <div className="space-y-2">
                       {report.actions.map((action, i) => {
                         const Icon = ACTION_ICONS[action.type] ?? Activity;
+                        // Filet de sécurité : on ne rend JAMAIS un objet en JSX,
+                        // même si le backend régresse. Évite React error #31.
+                        const safeText = (v: unknown): string =>
+                          typeof v === "string"
+                            ? v
+                            : v == null
+                              ? ""
+                              : typeof v === "number" || typeof v === "boolean"
+                                ? String(v)
+                                : "";
                         return (
                           <div
                             key={i}
@@ -298,10 +308,10 @@ export function ConversationReportModal({
                             </div>
                             <div>
                               <p className="text-xs font-bold">
-                                {action.label}
+                                {safeText(action.label)}
                               </p>
                               <p className="text-[10px] text-[var(--text-muted)]">
-                                {action.detail}
+                                {safeText(action.detail)}
                               </p>
                             </div>
                           </div>

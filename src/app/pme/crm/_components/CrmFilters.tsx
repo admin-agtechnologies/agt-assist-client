@@ -21,6 +21,8 @@ interface Props {
   onOrderingChange: (v: SortKey) => void;
   onRefresh: () => void;
   loading?: boolean;
+  hasConversations: boolean;
+  onHasConversationsChange: (v: boolean) => void;
 }
 
 export function CrmFilters({
@@ -37,6 +39,8 @@ export function CrmFilters({
   onOrderingChange,
   onRefresh,
   loading,
+  hasConversations,
+  onHasConversationsChange,
 }: Props) {
   const { dictionary: d } = useLanguage();
   const t = d.crm;
@@ -148,6 +152,11 @@ export function CrmFilters({
           active={hasHandoff}
           onClick={() => onHasHandoffChange(!hasHandoff)}
           label={t.filterHasHandoff}
+        />
+        <FilterPill
+          active={!hasConversations}
+          onClick={() => onHasConversationsChange(!hasConversations)}
+          label={t.filterIncludeNoConv} // ex: "Inclure sans conversation"
         />
       </div>
     </div>

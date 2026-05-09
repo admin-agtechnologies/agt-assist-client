@@ -248,6 +248,7 @@ export const fr = {
     filterAllBots: "Tous les bots",
     filterHasRdv: "Avec RDV",
     filterHasHandoff: "Avec transfert humain",
+    filterIncludeNoConv: "Inclure sans conversation",
     sortLabel: "Trier",
     sortRecent: "Récent (dernier contact)",
     sortName: "Nom (A→Z)",

@@ -234,15 +234,15 @@ export const en = {
     restartBtn: "Restart setup assistant",
   },
 
-
-
-   crm: {
+  crm: {
     title: "Customer CRM",
-    subtitle: "All your customers at a glance — aggregated from your conversations.",
+    subtitle:
+      "All your customers at a glance — aggregated from your conversations.",
     searchPlaceholder: "Search (name, phone, email)…",
     filterAllBots: "All bots",
     filterHasRdv: "With appointment",
     filterHasHandoff: "With human handoff",
+    filterIncludeNoConv: "Include without conversation",
     sortLabel: "Sort",
     sortRecent: "Recent (last contact)",
     sortName: "Name (A→Z)",
@@ -271,7 +271,8 @@ export const en = {
     detailNoSummary: "No summary available.",
     detailNoConversations: "No conversation for this customer.",
     empty: "No customers yet.",
-    emptyHint: "Your customers will appear here as soon as they chat with one of your bots.",
+    emptyHint:
+      "Your customers will appear here as soon as they chat with one of your bots.",
     errorLoad: "Error while loading.",
     of: "of",
     page: "Page",
@@ -282,8 +283,6 @@ export const en = {
     today: "today",
     yesterday: "yesterday",
   },
-
-   
 
   pending: {
     title: "Verify your email",
